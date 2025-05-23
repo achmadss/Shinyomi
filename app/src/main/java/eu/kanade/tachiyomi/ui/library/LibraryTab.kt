@@ -28,6 +28,7 @@ import cafe.adriel.voyager.navigator.Navigator
 import cafe.adriel.voyager.navigator.currentOrThrow
 import cafe.adriel.voyager.navigator.tab.LocalTabNavigator
 import cafe.adriel.voyager.navigator.tab.TabOptions
+import eu.kanade.domain.source.service.SourcePreferences
 import eu.kanade.presentation.category.components.ChangeCategoryDialog
 import eu.kanade.presentation.library.DeleteLibraryMangaDialog
 import eu.kanade.presentation.library.LibrarySettingsDialog
@@ -51,6 +52,10 @@ import eu.kanade.tachiyomi.ui.manga.MangaScreen
 import eu.kanade.tachiyomi.ui.reader.ReaderActivity
 import eu.kanade.tachiyomi.util.system.toast
 import exh.favorites.FavoritesSyncStatus
+import exh.recs.RecommendsScreen
+import exh.recs.batch.RecommendationSearchBottomSheetDialog
+import exh.recs.batch.RecommendationSearchProgressDialog
+import exh.recs.batch.SearchStatus
 import exh.source.MERGED_SOURCE_ID
 import kotlinx.collections.immutable.persistentListOf
 import kotlinx.coroutines.channels.Channel
@@ -59,7 +64,6 @@ import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.launch
 import tachiyomi.core.common.i18n.stringResource
 import tachiyomi.core.common.util.lang.launchIO
-import tachiyomi.domain.UnsortedPreferences
 import tachiyomi.domain.category.model.Category
 import tachiyomi.domain.library.model.LibraryGroup
 import tachiyomi.domain.library.model.LibraryManga
@@ -197,7 +201,7 @@ data object LibraryTab : Tab {
                         screenModel.clearSelection()
                         if (selectedMangaIds.isNotEmpty()) {
                             PreMigrationScreen.navigateToMigration(
-                                Injekt.get<UnsortedPreferences>().skipPreMigration().get(),
+                                Injekt.get<SourcePreferences>().skipPreMigration().get(),
                                 navigator,
                                 selectedMangaIds,
                             )
@@ -205,6 +209,7 @@ data object LibraryTab : Tab {
                             context.toast(SYMR.strings.no_valid_entry)
                         }
                     },
+                    onClickCollectRecommendations = screenModel::showRecommendationSearchDialog.takeIf { state.selection.size > 1 },
                     onClickAddToMangaDex = screenModel::syncMangaToDex.takeIf { state.showAddToMangadex },
                     onClickAddToWatcher = screenModel::addToWatcherBatch.takeIf { state.showAddToExternalWatcher },
                     onClickRemoveFromWatcher = screenModel::removeFromWatcherBatch.takeIf { state.showRemoveFromExternalWatcher },
@@ -312,6 +317,7 @@ data object LibraryTab : Tab {
                     },
                 )
             }
+            // SY -->
             LibraryScreenModel.Dialog.SyncFavoritesWarning -> {
                 SyncFavoritesWarningDialog(
                     onDismissRequest = onDismissRequest,
@@ -330,6 +336,17 @@ data object LibraryTab : Tab {
                     },
                 )
             }
+            is LibraryScreenModel.Dialog.RecommendationSearchSheet -> {
+                RecommendationSearchBottomSheetDialog(
+                    onDismissRequest = onDismissRequest,
+                    onSearchRequest = {
+                        onDismissRequest()
+                        screenModel.clearSelection()
+                        screenModel.runRecommendationSearch(dialog.manga)
+                    },
+                )
+            }
+            // SY <--
             null -> {}
         }
 
@@ -338,6 +355,12 @@ data object LibraryTab : Tab {
             status = screenModel.favoritesSync.status.collectAsState().value,
             setStatusIdle = { screenModel.favoritesSync.status.value = FavoritesSyncStatus.Idle },
             openManga = { navigator.push(MangaScreen(it)) },
+        )
+
+        RecommendationSearchProgressDialog(
+            status = screenModel.recommendationSearch.status.collectAsState().value,
+            setStatusIdle = { screenModel.recommendationSearch.status.value = SearchStatus.Idle },
+            setStatusCancelling = { screenModel.recommendationSearch.status.value = SearchStatus.Cancelling },
         )
         // SY <--
 
@@ -357,6 +380,30 @@ data object LibraryTab : Tab {
                 (context as? MainActivity)?.ready = true
             }
         }
+
+        // SY -->
+        val recSearchState by screenModel.recommendationSearch.status.collectAsState()
+        LaunchedEffect(recSearchState) {
+            when (val current = recSearchState) {
+                is SearchStatus.Finished.WithResults -> {
+                    RecommendsScreen.Args.MergedSourceMangas(current.results)
+                        .let(::RecommendsScreen)
+                        .let(navigator::push)
+
+                    screenModel.recommendationSearch.status.value = SearchStatus.Idle
+                }
+                is SearchStatus.Finished.WithoutResults -> {
+                    context.toast(SYMR.strings.rec_no_results)
+                    screenModel.recommendationSearch.status.value = SearchStatus.Idle
+                }
+                is SearchStatus.Cancelling -> {
+                    screenModel.cancelRecommendationSearch()
+                    screenModel.recommendationSearch.status.value = SearchStatus.Idle
+                }
+                else -> {}
+            }
+        }
+        // SY <--
 
         LaunchedEffect(Unit) {
             launch { queryEvent.receiveAsFlow().collect(screenModel::search) }

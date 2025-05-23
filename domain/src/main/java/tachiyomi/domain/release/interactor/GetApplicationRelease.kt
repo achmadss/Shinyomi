@@ -35,7 +35,6 @@ class GetApplicationRelease(
             isNewVersion(arguments.versionName, release.version)
         // SY <--
         return when {
-            isNewVersion && arguments.isThirdParty -> Result.ThirdPartyInstallation
             isNewVersion -> Result.NewUpdate(release)
             else -> Result.NoNewUpdate
         }
@@ -78,6 +77,5 @@ class GetApplicationRelease(
         data class NewUpdate(val release: Release) : Result
         data object NoNewUpdate : Result
         data object OsTooOld : Result
-        data object ThirdPartyInstallation : Result
     }
 }

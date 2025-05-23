@@ -23,6 +23,7 @@ import eu.kanade.domain.chapter.interactor.SyncChaptersWithSource
 import eu.kanade.domain.manga.interactor.UpdateManga
 import eu.kanade.domain.manga.model.copyFrom
 import eu.kanade.domain.manga.model.toSManga
+import eu.kanade.domain.source.service.SourcePreferences
 import eu.kanade.domain.sync.SyncPreferences
 import eu.kanade.domain.track.model.toDbTrack
 import eu.kanade.domain.track.model.toDomainTrack
@@ -64,7 +65,6 @@ import tachiyomi.core.common.i18n.stringResource
 import tachiyomi.core.common.preference.getAndSet
 import tachiyomi.core.common.util.lang.withIOContext
 import tachiyomi.core.common.util.system.logcat
-import tachiyomi.domain.UnsortedPreferences
 import tachiyomi.domain.category.model.Category
 import tachiyomi.domain.chapter.interactor.GetChaptersByMangaId
 import tachiyomi.domain.chapter.model.Chapter
@@ -101,9 +101,12 @@ import java.time.Instant
 import java.time.ZonedDateTime
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.TimeUnit
-import java.util.concurrent.atomic.AtomicBoolean
-import java.util.concurrent.atomic.AtomicInteger
+import kotlin.concurrent.atomics.AtomicBoolean
+import kotlin.concurrent.atomics.AtomicInt
+import kotlin.concurrent.atomics.ExperimentalAtomicApi
+import kotlin.concurrent.atomics.incrementAndFetch
 
+@OptIn(ExperimentalAtomicApi::class)
 class LibraryUpdateJob(private val context: Context, workerParams: WorkerParameters) :
     CoroutineWorker(context, workerParams) {
 
@@ -357,7 +360,7 @@ class LibraryUpdateJob(private val context: Context, workerParams: WorkerParamet
      */
     private suspend fun updateChapterList(singleMangaUpdate: Boolean = false) {
         val semaphore = Semaphore(5)
-        val progressCount = AtomicInteger(0)
+        val progressCount = AtomicInt(0)
         val currentlyUpdatingManga = CopyOnWriteArrayList<Manga>()
         val newUpdates = CopyOnWriteArrayList<Pair<Manga, Array<Chapter>>>()
         val failedUpdates = CopyOnWriteArrayList<Pair<Manga, String?>>()
@@ -416,36 +419,37 @@ class LibraryUpdateJob(private val context: Context, workerParams: WorkerParamet
                                 ) {
                                     try {
                                         val newChapters = updateManga(manga, fetchWindow)
-                                            // SY -->
-                                            .sortedByDescending { it.sourceOrder }.run {
-                                                if (libraryPreferences.libraryReadDuplicateChapters().get()) {
-                                                    val readChapters = getChaptersByMangaId.await(manga.id).filter {
-                                                        it.read
-                                                    }
-                                                    val newReadChapters = this.filter { chapter ->
-                                                        chapter.chapterNumber >= 0 &&
-                                                            readChapters.any {
-                                                                it.chapterNumber == chapter.chapterNumber
-                                                            }
-                                                    }
-
-                                                    if (newReadChapters.isNotEmpty()) {
-                                                        setReadStatus.await(true, *newReadChapters.toTypedArray())
-                                                    }
-
-                                                    this.filterNot { newReadChapters.contains(it) }
-                                                } else {
-                                                    this
-                                                }
-                                            }
-                                        // SY <--
+                                            .sortedByDescending { it.sourceOrder }
+//                                            // SY -->
+//                                            .sortedByDescending { it.sourceOrder }.run {
+//                                                if (libraryPreferences.libraryReadDuplicateChapters().get()) {
+//                                                    val readChapters = getChaptersByMangaId.await(manga.id).filter {
+//                                                        it.read
+//                                                    }
+//                                                    val newReadChapters = this.filter { chapter ->
+//                                                        chapter.chapterNumber >= 0 &&
+//                                                            readChapters.any {
+//                                                                it.chapterNumber == chapter.chapterNumber
+//                                                            }
+//                                                    }
+//
+//                                                    if (newReadChapters.isNotEmpty()) {
+//                                                        setReadStatus.await(true, *newReadChapters.toTypedArray())
+//                                                    }
+//
+//                                                    this.filterNot { newReadChapters.contains(it) }
+//                                                } else {
+//                                                    this
+//                                                }
+//                                            }
+//                                        // SY <--
 
                                         if (newChapters.isNotEmpty()) {
                                             val chaptersToDownload = filterChaptersForDownload.await(manga, newChapters)
 
                                             if (chaptersToDownload.isNotEmpty()) {
                                                 downloadChapters(manga, chaptersToDownload)
-                                                hasDownloads.set(true)
+                                                hasDownloads.store(true)
                                             }
 
                                             libraryPreferences.newUpdatesCount().getAndSet { it + newChapters.size }
@@ -482,7 +486,7 @@ class LibraryUpdateJob(private val context: Context, workerParams: WorkerParamet
 
         if (newUpdates.isNotEmpty()) {
             notifier.showUpdateNotifications(newUpdates)
-            if (hasDownloads.get()) {
+            if (hasDownloads.load()) {
                 downloadManager.startDownloads()
             }
         }
@@ -548,7 +552,7 @@ class LibraryUpdateJob(private val context: Context, workerParams: WorkerParamet
 
     private suspend fun updateCovers() {
         val semaphore = Semaphore(5)
-        val progressCount = AtomicInteger(0)
+        val progressCount = AtomicInt(0)
         val currentlyUpdatingManga = CopyOnWriteArrayList<Manga>()
 
         coroutineScope {
@@ -600,7 +604,7 @@ class LibraryUpdateJob(private val context: Context, workerParams: WorkerParamet
      * filter all follows from Mangadex and only add reading or rereading manga to library
      */
     private suspend fun syncFollows() = coroutineScope {
-        val preferences = Injekt.get<UnsortedPreferences>()
+        val preferences = Injekt.get<SourcePreferences>()
         var count = 0
         val mangaDex = MdUtil.getEnabledMangaDex(preferences, sourceManager = sourceManager)
             ?: return@coroutineScope
@@ -623,7 +627,7 @@ class LibraryUpdateJob(private val context: Context, workerParams: WorkerParamet
                 var dbManga = getManga.await(networkManga.url, mangaDex.id)
 
                 if (dbManga == null) {
-                    dbManga = networkToLocalManga.await(
+                    dbManga = networkToLocalManga(
                         Manga.create().copy(
                             url = networkManga.url,
                             ogTitle = networkManga.title,
@@ -682,7 +686,7 @@ class LibraryUpdateJob(private val context: Context, workerParams: WorkerParamet
 
     private suspend fun withUpdateNotification(
         updatingManga: CopyOnWriteArrayList<Manga>,
-        completed: AtomicInteger,
+        completed: AtomicInt,
         manga: Manga,
         showProgress: Boolean = true,
         block: suspend () -> Unit,
@@ -693,7 +697,7 @@ class LibraryUpdateJob(private val context: Context, workerParams: WorkerParamet
             updatingManga.add(manga)
             notifier.showProgressNotification(
                 updatingManga,
-                completed.get(),
+                completed.load(),
                 mangaToUpdate.size,
             )
         }
@@ -704,10 +708,10 @@ class LibraryUpdateJob(private val context: Context, workerParams: WorkerParamet
 
         if (showProgress) {
             updatingManga.remove(manga)
-            completed.getAndIncrement()
+            completed.incrementAndFetch()
             notifier.showProgressNotification(
                 updatingManga,
-                completed.get(),
+                completed.load(),
                 mangaToUpdate.size,
             )
         }

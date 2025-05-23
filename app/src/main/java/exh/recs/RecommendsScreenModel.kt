@@ -4,10 +4,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.produceState
 import cafe.adriel.voyager.core.model.StateScreenModel
-import eu.kanade.domain.manga.model.toDomainManga
 import eu.kanade.presentation.util.ioCoroutineScope
 import eu.kanade.tachiyomi.source.CatalogueSource
 import exh.recs.sources.RecommendationPagingSource
+import exh.recs.sources.StaticResultPagingSource
 import kotlinx.collections.immutable.PersistentMap
 import kotlinx.collections.immutable.mutate
 import kotlinx.collections.immutable.persistentMapOf
@@ -22,6 +22,7 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import mihon.domain.manga.model.toDomainManga
 import tachiyomi.domain.manga.interactor.GetManga
 import tachiyomi.domain.manga.interactor.NetworkToLocalManga
 import tachiyomi.domain.manga.model.Manga
@@ -30,14 +31,11 @@ import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 
 open class RecommendsScreenModel(
-    val mangaId: Long,
-    val sourceId: Long,
+    private val args: RecommendsScreen.Args,
     sourceManager: SourceManager = Injekt.get(),
     private val getManga: GetManga = Injekt.get(),
     private val networkToLocalManga: NetworkToLocalManga = Injekt.get(),
 ) : StateScreenModel<RecommendsScreenModel.State>(State()) {
-
-    val source = sourceManager.getOrStub(sourceId) as CatalogueSource
 
     private val coroutineDispatcher = Dispatchers.IO.limitedParallelism(5)
 
@@ -51,9 +49,20 @@ open class RecommendsScreenModel(
 
     init {
         ioCoroutineScope.launch {
-            val manga = getManga.await(mangaId)!!
-            mutableState.update { it.copy(manga = manga) }
-            val recommendationSources = RecommendationPagingSource.createSources(manga, source)
+            val recommendationSources = when (args) {
+                is RecommendsScreen.Args.SingleSourceManga -> {
+                    val manga = getManga.await(args.mangaId)!!
+                    mutableState.update { it.copy(title = manga.title) }
+
+                    RecommendationPagingSource.createSources(
+                        manga,
+                        sourceManager.getOrStub(args.sourceId) as CatalogueSource,
+                    )
+                }
+                is RecommendsScreen.Args.MergedSourceMangas -> {
+                    args.mergedResults.map(::StaticResultPagingSource)
+                }
+            }
 
             updateItems(
                 recommendationSources
@@ -76,7 +85,7 @@ open class RecommendsScreenModel(
                             val recSourceId = recSource.associatedSourceId
                             if (recSourceId != null) {
                                 // If the recommendation is associated with a source, resolve it
-                                networkToLocalManga.await(it.toDomainManga(recSourceId))
+                                networkToLocalManga(it.toDomainManga(recSourceId))
                             } else {
                                 // Otherwise, skip this step. The user will be prompted to choose a source via SmartSearch
                                 it.toDomainManga(-1)
@@ -118,15 +127,17 @@ open class RecommendsScreenModel(
     }
 
     private fun updateItem(source: RecommendationPagingSource, result: RecommendationItemResult) {
-        val newItems = state.value.items.mutate {
-            it[source] = result
+        synchronized(state.value.items) {
+            val newItems = state.value.items.mutate {
+                it[source] = result
+            }
+            updateItems(newItems)
         }
-        updateItems(newItems)
     }
 
     @Immutable
     data class State(
-        val manga: Manga? = null,
+        val title: String? = null,
         val items: PersistentMap<RecommendationPagingSource, RecommendationItemResult> = persistentMapOf(),
     ) {
         val progress: Int = items.count { it.value !is RecommendationItemResult.Loading }

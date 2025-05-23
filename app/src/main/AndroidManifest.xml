@@ -367,7 +367,7 @@
                 <data android:scheme="https" />
                 <data android:scheme="http" />
 
-                <data android:host="pururin.io" />
+                <data android:host="pururin.me" />
 
                 <data android:pathPattern="/gallery/..*" />
             </intent-filter>
@@ -421,6 +421,10 @@
                     android:scheme="tachiyomisy" />
             </intent-filter>
         </activity>
+
+        <activity
+            android:name="com.journeyapps.barcodescanner.CaptureActivity"
+            tools:remove="screenOrientation" />
     </application>
 
     <uses-sdk tools:overrideLibrary="rikka.shizuku.api"

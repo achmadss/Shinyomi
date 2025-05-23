@@ -20,6 +20,10 @@ jobs:
       - name: Clone repo
         uses: actions/checkout@v4
 
+      - name: Setup Android SDK
+        run: |
+          ${ANDROID_SDK_ROOT}/cmdline-tools/latest/bin/sdkmanager "build-tools;29.0.3"
+
       - name: Set up JDK
         uses: actions/setup-java@v4
         with:
@@ -62,6 +66,8 @@ jobs:
           alias: ${{ secrets.ALIAS }}
           keyStorePassword: ${{ secrets.KEY_STORE_PASSWORD }}
           keyPassword: ${{ secrets.KEY_PASSWORD }}
+        env:
+          BUILD_TOOLS_VERSION: '35.0.1'
 
       - name: Clean up build artifacts
         run: |
