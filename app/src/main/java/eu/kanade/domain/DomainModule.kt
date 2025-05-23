@@ -98,12 +98,6 @@ import tachiyomi.domain.track.interactor.InsertTrack
 import tachiyomi.domain.track.repository.TrackRepository
 import tachiyomi.domain.updates.interactor.GetUpdates
 import tachiyomi.domain.updates.repository.UpdatesRepository
-import tachiyomi.domain.watcher.interactor.AddToExternalWatcher
-import tachiyomi.domain.watcher.interactor.DisableExternalWatcher
-import tachiyomi.domain.watcher.interactor.EnableExternalWatcher
-import tachiyomi.domain.watcher.interactor.GetExternalWatcher
-import tachiyomi.domain.watcher.interactor.RemoveFromExternalWatcher
-import tachiyomi.domain.watcher.repository.ExternalWatcherRepository
 import uy.kohesive.injekt.api.InjektRegistrar
 
 class DomainModule : InjektModule {
@@ -140,13 +134,6 @@ class DomainModule : InjektModule {
         addFactory { SetMangaCategories(get()) }
         addFactory { GetExcludedScanlators(get()) }
         addFactory { SetExcludedScanlators(get()) }
-
-        addSingletonFactory<ExternalWatcherRepository> { ExternalWatcherRepositoryImpl(get(), get(), get()) }
-        addFactory { GetExternalWatcher(get()) }
-        addFactory { AddToExternalWatcher(get()) }
-        addFactory { RemoveFromExternalWatcher(get()) }
-        addFactory { DisableExternalWatcher(get()) }
-        addFactory { EnableExternalWatcher(get()) }
 
         addSingletonFactory<ReleaseService> { ReleaseServiceImpl(get(), get()) }
         addFactory { GetApplicationRelease(get(), get()) }

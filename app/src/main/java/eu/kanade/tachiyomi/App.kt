@@ -139,8 +139,6 @@ class App : Application(), DefaultLifecycleObserver, SingletonImageLoader.Factor
 
         val scope = ProcessLifecycleOwner.get().lifecycleScope
 
-        logcat(LogPriority.DEBUG, "FCM_Token") { basePreferences.fcmToken().get() }
-
         // Show notification to disable Incognito Mode when it's enabled
         basePreferences.incognitoMode().changes()
             .onEach { enabled ->

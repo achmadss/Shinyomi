@@ -154,11 +154,6 @@ fun MangaScreen(
     onMorePreviewsClicked: () -> Unit,
     previewsRowCount: Int,
     // SY <--
-
-    // Shin -->
-    onWatchClicked: () -> Unit,
-    // Shin <--
-
     // For bottom action menu
     onMultiBookmarkClicked: (List<Chapter>, bookmarked: Boolean) -> Unit,
     onMultiMarkAsReadClicked: (List<Chapter>, markAsRead: Boolean) -> Unit,
@@ -226,9 +221,6 @@ fun MangaScreen(
             onChapterSelected = onChapterSelected,
             onAllChapterSelected = onAllChapterSelected,
             onInvertSelection = onInvertSelection,
-            // Shin -->
-            onWatchClicked = onWatchClicked,
-            // Shin <--
         )
     } else {
         MangaScreenLargeImpl(
@@ -276,9 +268,6 @@ fun MangaScreen(
             onChapterSelected = onChapterSelected,
             onAllChapterSelected = onAllChapterSelected,
             onInvertSelection = onInvertSelection,
-            // Shin -->
-            onWatchClicked = onWatchClicked,
-            // Shin <--
         )
     }
 }
@@ -328,10 +317,6 @@ private fun MangaScreenSmallImpl(
     onMorePreviewsClicked: () -> Unit,
     previewsRowCount: Int,
     // SY <--
-
-    // Shin -->
-    onWatchClicked: () -> Unit,
-    // Shin <--
 
     // For bottom action menu
     onMultiBookmarkClicked: (List<Chapter>, bookmarked: Boolean) -> Unit,
@@ -403,12 +388,6 @@ private fun MangaScreenSmallImpl(
                 onClickMergedSettings = onMergedSettingsClicked.takeIf { state.manga.source == MERGED_SOURCE_ID },
                 onClickMerge = onMergeClicked.takeIf { state.showMergeInOverflow },
                 // SY <--
-
-                // Shin -->
-                isWatching = state.isWatching,
-                onClickWatch = onWatchClicked,
-                // Shin <--
-
                 actionModeCounter = selectedChapterCount,
                 onCancelActionMode = { onAllChapterSelected(false) },
                 onSelectAll = { onAllChapterSelected(true) },
@@ -662,10 +641,6 @@ fun MangaScreenLargeImpl(
     previewsRowCount: Int,
     // SY <--
 
-    // Shin -->
-    onWatchClicked: () -> Unit,
-    // Shin <--
-
     // For bottom action menu
     onMultiBookmarkClicked: (List<Chapter>, bookmarked: Boolean) -> Unit,
     onMultiMarkAsReadClicked: (List<Chapter>, markAsRead: Boolean) -> Unit,
@@ -727,10 +702,6 @@ fun MangaScreenLargeImpl(
                 onClickMergedSettings = onMergedSettingsClicked.takeIf { state.manga.source == MERGED_SOURCE_ID },
                 onClickMerge = onMergeClicked.takeIf { state.showMergeInOverflow },
                 // SY <--
-                // Shin -->
-                isWatching = state.isWatching,
-                onClickWatch = onWatchClicked,
-                // Shin <--
                 onCancelActionMode = { onAllChapterSelected(false) },
                 actionModeCounter = selectedChapterCount,
                 onSelectAll = { onAllChapterSelected(true) },

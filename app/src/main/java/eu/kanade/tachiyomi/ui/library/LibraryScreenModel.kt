@@ -114,9 +114,6 @@ import tachiyomi.domain.source.service.SourceManager
 import tachiyomi.domain.track.interactor.GetTracks
 import tachiyomi.domain.track.interactor.GetTracksPerManga
 import tachiyomi.domain.track.model.Track
-import tachiyomi.domain.watcher.interactor.AddToExternalWatcher
-import tachiyomi.domain.watcher.interactor.RemoveFromExternalWatcher
-import tachiyomi.domain.watcher.model.ExternalWatcherRequest
 import tachiyomi.i18n.MR
 import tachiyomi.i18n.sy.SYMR
 import tachiyomi.source.local.LocalSource
@@ -159,14 +156,7 @@ class LibraryScreenModel(
     private val getMergedChaptersByMangaId: GetMergedChaptersByMangaId = Injekt.get(),
     private val syncPreferences: SyncPreferences = Injekt.get(),
     // SY <--
-    // Shin -->
-    private val addToExternalWatcher: AddToExternalWatcher = Injekt.get(),
-    private val removeFromExternalWatcher: RemoveFromExternalWatcher = Injekt.get(),
-    private val basePreferences: BasePreferences = Injekt.get(),
-    // Shin <--
-) : StateScreenModel<LibraryScreenModel.State>(
-    State(isWatcherEnabled = libraryPreferences.enableExternalWatcher().get()),
-) {
+) : StateScreenModel<LibraryScreenModel.State>(State()) {
 
     var activeCategoryIndex: Int by libraryPreferences.lastUsedCategory().asState(screenModelScope)
 
@@ -784,54 +774,6 @@ class LibraryScreenModel(
             MdUtil.getEnabledMangaDex(sourcePreferences, sourceManager)?.let { mdex ->
                 state.value.selection.fastFilter { it.manga.source in mangaDexSourceIds }.fastForEach { (manga) ->
                     mdex.updateFollowStatus(MdUtil.getMangaId(manga.url), FollowStatus.READING)
-                }
-            }
-            clearSelection()
-        }
-    }
-
-    @OptIn(DelicateCoroutinesApi::class)
-    fun addToWatcherBatch() {
-        launchIO {
-            state.value.selection.fastForEach { (manga) ->
-                if (manga.source in COMICK_SOURCE_IDS) {
-                    try {
-                        addToExternalWatcher.await(
-                            ExternalWatcherRequest(
-                                mangaTitle = manga.title,
-                                mangaId = manga.id.toInt(),
-                                mangaHid = manga.url.removePrefix("/comic/").removeSuffix("#"),
-                                interval = libraryPreferences.externalWatcherInterval().get(),
-                                deviceToken = basePreferences.fcmToken().get(),
-                            ),
-                        )
-                    } catch (e: Exception) {
-                        e.printStackTrace()
-                    }
-                }
-            }
-            clearSelection()
-        }
-    }
-
-    @OptIn(DelicateCoroutinesApi::class)
-    fun removeFromWatcherBatch() {
-        launchIO {
-            state.value.selection.fastForEach { (manga) ->
-                if (manga.source in COMICK_SOURCE_IDS) {
-                    try {
-                        removeFromExternalWatcher.await(
-                            ExternalWatcherRequest(
-                                mangaTitle = manga.title,
-                                mangaId = manga.id.toInt(),
-                                mangaHid = manga.url.removePrefix("/comic/").removeSuffix("#"),
-                                interval = libraryPreferences.externalWatcherInterval().get(),
-                                deviceToken = basePreferences.fcmToken().get(),
-                            ),
-                        )
-                    } catch (e: Exception) {
-                        e.printStackTrace()
-                    }
                 }
             }
             clearSelection()
@@ -1457,9 +1399,6 @@ class LibraryScreenModel(
         val ogCategories: List<Category> = emptyList(),
         val groupType: Int = LibraryGroup.BY_DEFAULT,
         // SY <--
-        // Shin -->
-        val isWatcherEnabled: Boolean,
-        // Shin <--
     ) {
         private val libraryCount by lazy {
             library.values
@@ -1484,16 +1423,6 @@ class LibraryScreenModel(
 
         val showAddToMangadex: Boolean by lazy {
             selection.any { it.manga.source in mangaDexSourceIds }
-        }
-
-        val showAddToExternalWatcher: Boolean by lazy {
-            // TODO add more extensions in the future?
-            isWatcherEnabled && selection.any { it.manga.source in COMICK_SOURCE_IDS }
-        }
-
-        val showRemoveFromExternalWatcher: Boolean by lazy {
-            // logic might change in the future
-            isWatcherEnabled && selection.any { it.manga.source in COMICK_SOURCE_IDS }
         }
 
         val showResetInfo: Boolean by lazy {

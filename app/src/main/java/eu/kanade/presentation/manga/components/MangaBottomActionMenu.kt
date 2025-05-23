@@ -239,8 +239,6 @@ fun LibraryBottomActionMenu(
     onClickMigrate: (() -> Unit)?,
     onClickCollectRecommendations: (() -> Unit)?,
     onClickAddToMangaDex: (() -> Unit)?,
-    onClickAddToWatcher: (() -> Unit)?,
-    onClickRemoveFromWatcher: (() -> Unit)?,
     onClickResetInfo: (() -> Unit)?,
     // SY <--
     modifier: Modifier = Modifier,
@@ -374,18 +372,6 @@ fun LibraryBottomActionMenu(
                             DropdownMenuItem(
                                 text = { Text(stringResource(SYMR.strings.mangadex_add_to_follows)) },
                                 onClick = onClickAddToMangaDex,
-                            )
-                        }
-                        if (onClickAddToWatcher != null) {
-                            DropdownMenuItem(
-                                text = { Text(stringResource(ShinMR.strings.external_watcher_add_batch)) },
-                                onClick = onClickAddToWatcher,
-                            )
-                        }
-                        if (onClickRemoveFromWatcher != null) {
-                            DropdownMenuItem(
-                                text = { Text(stringResource(ShinMR.strings.external_watcher_remove_batch)) },
-                                onClick = onClickRemoveFromWatcher,
                             )
                         }
                         if (onClickResetInfo != null) {

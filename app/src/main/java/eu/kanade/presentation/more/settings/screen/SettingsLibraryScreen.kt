@@ -15,19 +15,16 @@ import androidx.core.content.ContextCompat
 import cafe.adriel.voyager.navigator.LocalNavigator
 import cafe.adriel.voyager.navigator.Navigator
 import cafe.adriel.voyager.navigator.currentOrThrow
-import eu.kanade.domain.base.BasePreferences
 import eu.kanade.presentation.category.visualName
 import eu.kanade.presentation.more.settings.Preference
 import eu.kanade.presentation.more.settings.widget.TriStateListDialog
 import eu.kanade.tachiyomi.data.library.LibraryUpdateJob
 import eu.kanade.tachiyomi.ui.category.CategoryScreen
 import eu.kanade.tachiyomi.ui.category.genre.SortTagScreen
-import eu.kanade.tachiyomi.util.system.toast
 import kotlinx.collections.immutable.persistentListOf
 import kotlinx.collections.immutable.persistentMapOf
 import kotlinx.collections.immutable.toImmutableMap
 import kotlinx.coroutines.launch
-import tachiyomi.data.watcher.ExternalWatcherException
 import tachiyomi.domain.category.interactor.GetCategories
 import tachiyomi.domain.category.interactor.ResetCategoryFlags
 import tachiyomi.domain.category.model.Category
@@ -40,14 +37,9 @@ import tachiyomi.domain.library.service.LibraryPreferences.Companion.MANGA_HAS_U
 import tachiyomi.domain.library.service.LibraryPreferences.Companion.MANGA_NON_COMPLETED
 import tachiyomi.domain.library.service.LibraryPreferences.Companion.MANGA_NON_READ
 import tachiyomi.domain.library.service.LibraryPreferences.Companion.MANGA_OUTSIDE_RELEASE_PERIOD
-import tachiyomi.domain.watcher.EXTERNAL_WATCHER_HOST_ACHMAD
-import tachiyomi.domain.watcher.EXTERNAL_WATCHER_HOST_DISABLED
-import tachiyomi.domain.watcher.interactor.DisableExternalWatcher
-import tachiyomi.domain.watcher.interactor.EnableExternalWatcher
 import tachiyomi.domain.library.service.LibraryPreferences.Companion.MARK_DUPLICATE_CHAPTER_READ_EXISTING
 import tachiyomi.domain.library.service.LibraryPreferences.Companion.MARK_DUPLICATE_CHAPTER_READ_NEW
 import tachiyomi.i18n.MR
-import tachiyomi.i18n.shin.ShinMR
 import tachiyomi.i18n.sy.SYMR
 import tachiyomi.presentation.core.i18n.pluralStringResource
 import tachiyomi.presentation.core.i18n.stringResource
@@ -67,12 +59,6 @@ object SettingsLibraryScreen : SearchableSettings {
         val libraryPreferences = remember { Injekt.get<LibraryPreferences>() }
         val allCategories by getCategories.subscribe().collectAsState(initial = emptyList())
 
-        // Shin -->
-        val basePreferences = remember { Injekt.get<BasePreferences>() }
-        val enableExternalWatcher = remember { Injekt.get<EnableExternalWatcher>() }
-        val disableExternalWatcher = remember { Injekt.get<DisableExternalWatcher>() }
-        // Shin <--
-
         return listOf(
             getCategoriesGroup(LocalNavigator.currentOrThrow, allCategories, libraryPreferences),
             getGlobalUpdateGroup(allCategories, libraryPreferences),
@@ -80,9 +66,6 @@ object SettingsLibraryScreen : SearchableSettings {
             // SY -->
             getSortingCategory(LocalNavigator.currentOrThrow, libraryPreferences),
             // SY <--
-            // Shin -->
-            getWatchStatusGroup(libraryPreferences, basePreferences, enableExternalWatcher, disableExternalWatcher),
-            // Shin <--
         )
     }
 
@@ -314,99 +297,4 @@ object SettingsLibraryScreen : SearchableSettings {
     }
     // SY <--
 
-    // Shin -->
-    @Composable
-    private fun getWatchStatusGroup(
-        libraryPreferences: LibraryPreferences,
-        basePreferences: BasePreferences,
-        enableExternalWatcher: EnableExternalWatcher,
-        disableExternalWatcher: DisableExternalWatcher,
-    ): Preference.PreferenceGroup {
-        val context = LocalContext.current
-        val scope = rememberCoroutineScope()
-        val externalWatcherPref = libraryPreferences.enableExternalWatcher()
-        val externalWatcherHostPref = libraryPreferences.externalWatcherHost()
-        val externalWatcherIntervalPref = libraryPreferences.externalWatcherInterval()
-        val externalWatcherEnabled by externalWatcherPref.collectAsState()
-        val externalWatcherHost by externalWatcherHostPref.collectAsState()
-        val seconds = 60L
-        var externalWatcherPrefLoading by remember { mutableStateOf(false) }
-
-        suspend fun onChangeExternalWatcherPref(newValue: Boolean): Boolean {
-            if (externalWatcherPrefLoading) return false
-            try {
-                externalWatcherPrefLoading = true
-                val fcmToken = basePreferences.fcmToken().get()
-                val result =
-                    if (newValue) {
-                        enableExternalWatcher.await(fcmToken, externalWatcherIntervalPref.get())
-                    } else {
-                        disableExternalWatcher.await(fcmToken)
-                    }
-                externalWatcherPrefLoading = false
-                return result
-            } catch (e: ExternalWatcherException) {
-                externalWatcherPrefLoading = false
-                e.printStackTrace()
-                scope.launch { context.toast(e.message) }
-                return false
-            } catch (e: Exception) {
-                externalWatcherPrefLoading = false
-                e.printStackTrace()
-                scope.launch { context.toast(e.message) }
-                return externalWatcherEnabled
-            }
-        }
-
-        return Preference.PreferenceGroup(
-            title = stringResource(ShinMR.strings.external_watcher_settings_title),
-            preferenceItems = persistentListOf(
-                Preference.PreferenceItem.ListPreference(
-                    pref = externalWatcherHostPref,
-                    enabled = !externalWatcherEnabled,
-                    title = stringResource(ShinMR.strings.external_watcher_settings_host_title),
-                    subtitle = when {
-                        externalWatcherHost.isNotBlank() -> "%s"
-                        else -> stringResource(ShinMR.strings.external_watcher_no_host)
-                    },
-                    entries = persistentMapOf(
-                        EXTERNAL_WATCHER_HOST_DISABLED to "Disabled",
-                        EXTERNAL_WATCHER_HOST_ACHMAD to EXTERNAL_WATCHER_HOST_ACHMAD,
-                    ),
-                ),
-                Preference.PreferenceItem.ListPreference(
-                    pref = externalWatcherIntervalPref,
-                    enabled = !externalWatcherEnabled,
-                    title = stringResource(ShinMR.strings.external_watcher_settings_interval),
-                    entries = persistentMapOf(
-                        10L to stringResource(ShinMR.strings.watch_10seconds),
-                        (5L).times(seconds) to stringResource(ShinMR.strings.watch_5minutes),
-                        (10L).times(seconds) to stringResource(ShinMR.strings.watch_10minutes),
-                        (30L).times(seconds) to stringResource(ShinMR.strings.watch_30minutes),
-                        (60L).times(seconds) to stringResource(ShinMR.strings.watch_1hour),
-                        (180L).times(seconds) to stringResource(ShinMR.strings.watch_3hour),
-                        (360L).times(seconds) to stringResource(ShinMR.strings.watch_6hour),
-                        (720L).times(seconds) to stringResource(ShinMR.strings.watch_12hour),
-                        (1440L).times(seconds) to stringResource(ShinMR.strings.watch_24hour),
-                    ),
-                ),
-                Preference.PreferenceItem.SwitchPreference(
-                    pref = externalWatcherPref,
-                    enabled = externalWatcherHost.isNotBlank(),
-                    title = stringResource(ShinMR.strings.external_watcher_settings_enable_title),
-                    subtitle = stringResource(ShinMR.strings.external_watcher_settings_enable_subtitle),
-                    onValueChanged = { newValue -> onChangeExternalWatcherPref(newValue) },
-                ),
-
-                Preference.PreferenceItem.InfoPreference(
-                    title = when {
-                        externalWatcherPref.get() -> stringResource(ShinMR.strings.external_watcher_info_disable)
-                        else -> stringResource(ShinMR.strings.external_watcher_info_enable)
-                    },
-                ),
-                // TODO add feature to watch all library manga
-            ),
-        )
-    }
-    // Shin <--
 }

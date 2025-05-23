@@ -220,15 +220,6 @@ class LibraryPreferences(
 
     // SY <--
 
-    // Shin -->
-
-    fun enableExternalWatcher() = preferenceStore.getBoolean("pref_enable_external_watcher", false)
-
-    fun externalWatcherInterval() = preferenceStore.getLong("pref_external_watcher_interval", (5L).times(60L)) // in seconds
-
-    fun externalWatcherHost() = preferenceStore.getString("pref_external_watcher_host", EXTERNAL_WATCHER_HOST_DISABLED)
-
-    // Shin <--
 
     companion object {
         const val DEVICE_ONLY_ON_WIFI = "wifi"

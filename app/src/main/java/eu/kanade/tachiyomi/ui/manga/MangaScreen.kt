@@ -232,9 +232,6 @@ class MangaScreen(
             onChapterSelected = screenModel::toggleSelection,
             onAllChapterSelected = screenModel::toggleAllSelection,
             onInvertSelection = screenModel::invertSelection,
-            // Shin -->
-            onWatchClicked = screenModel::toggleExternalWatcher,
-            // Shin <--
         )
 
         var showScanlatorsDialog by remember { mutableStateOf(false) }
