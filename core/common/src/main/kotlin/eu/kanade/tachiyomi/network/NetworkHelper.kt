@@ -74,6 +74,13 @@ open /* SY <-- */ class NetworkHelper(
         )
         .build()
 
+    val pingClient = clientBuilder
+        .addInterceptor(
+            CloudflareInterceptor(context, cookieJar, ::defaultUserAgentProvider),
+        )
+        .pingInterval(15, TimeUnit.SECONDS)
+        .build()
+
     /**
      * @deprecated Since extension-lib 1.5
      */

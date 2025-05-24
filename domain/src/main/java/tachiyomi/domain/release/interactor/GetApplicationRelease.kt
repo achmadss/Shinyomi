@@ -66,7 +66,6 @@ class GetApplicationRelease(
     // Shin <--
 
     data class Arguments(
-        val isThirdParty: Boolean,
         val commitCount: Int,
         val versionName: String,
         val repository: String,

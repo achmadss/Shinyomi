@@ -2,8 +2,6 @@ package eu.kanade.tachiyomi.data.updater
 
 import android.content.Context
 import eu.kanade.tachiyomi.BuildConfig
-import eu.kanade.tachiyomi.util.system.isPreviewBuildType
-import exh.syDebugVersion
 import tachiyomi.core.common.util.lang.withIOContext
 import tachiyomi.domain.release.interactor.GetApplicationRelease
 import uy.kohesive.injekt.injectLazy
@@ -21,7 +19,6 @@ class AppUpdateChecker {
         return withIOContext {
             val result = getApplicationRelease.await(
                 GetApplicationRelease.Arguments(
-                    context.isInstalledFromFDroid(),
                     BuildConfig.COMMIT_COUNT.toInt(),
                     BuildConfig.VERSION_NAME,
                     GITHUB_REPO,

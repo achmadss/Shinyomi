@@ -16,4 +16,8 @@ object Constants {
     const val SHORTCUT_SOURCES = "eu.kanade.tachiyomi.SHOW_CATALOGUES"
     const val SHORTCUT_EXTENSIONS = "eu.kanade.tachiyomi.EXTENSIONS"
     const val SHORTCUT_DOWNLOADS = "eu.kanade.tachiyomi.SHOW_DOWNLOADS"
+
+    // Shin -->
+    const val REMOTE_UPDATER_DEFAULT_URL = "wss://suwayomi.achmad.dev/api/v1/live-update"
+    // Shin <--
 }

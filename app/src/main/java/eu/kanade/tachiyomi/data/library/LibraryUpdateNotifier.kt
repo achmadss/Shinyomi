@@ -157,10 +157,26 @@ class LibraryUpdateNotifier(
         ) {
             setContentTitle(context.stringResource(MR.strings.notification_update_error, failed))
             setContentText(context.stringResource(MR.strings.action_show_errors))
-            setSmallIcon(R.drawable.ic_tachi)
+            setSmallIcon(R.drawable.ic_shinyomi)
 
             setContentIntent(NotificationReceiver.openErrorLogPendingActivity(context, uri))
         }
+    }
+
+    fun showProgressRemoteNotification(current: Int, total: Int) {
+        progressNotificationBuilder
+            .setContentTitle(
+                context.stringResource(
+                    MR.strings.notification_updating_progress,
+                    percentFormatter.format(current.toFloat() / total),
+                ),
+            )
+        context.notify(
+            Notifications.ID_LIBRARY_PROGRESS,
+            progressNotificationBuilder
+                .setProgress(total, current, false)
+                .build(),
+        )
     }
 
     /**
@@ -197,7 +213,7 @@ class LibraryUpdateNotifier(
                 }
             }
 
-            setSmallIcon(R.drawable.ic_tachi)
+            setSmallIcon(R.drawable.ic_shinyomi)
             setLargeIcon(notificationBitmap)
 
             setGroup(Notifications.GROUP_NEW_CHAPTERS)
@@ -233,7 +249,7 @@ class LibraryUpdateNotifier(
             setContentText(description)
             setStyle(NotificationCompat.BigTextStyle().bigText(description))
 
-            setSmallIcon(R.drawable.ic_tachi)
+            setSmallIcon(R.drawable.ic_shinyomi)
 
             if (icon != null) {
                 setLargeIcon(icon)

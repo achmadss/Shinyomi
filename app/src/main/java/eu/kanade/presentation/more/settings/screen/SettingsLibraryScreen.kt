@@ -25,6 +25,7 @@ import kotlinx.collections.immutable.persistentListOf
 import kotlinx.collections.immutable.persistentMapOf
 import kotlinx.collections.immutable.toImmutableMap
 import kotlinx.coroutines.launch
+import tachiyomi.core.common.Constants
 import tachiyomi.domain.category.interactor.GetCategories
 import tachiyomi.domain.category.interactor.ResetCategoryFlags
 import tachiyomi.domain.category.model.Category
@@ -40,6 +41,7 @@ import tachiyomi.domain.library.service.LibraryPreferences.Companion.MANGA_OUTSI
 import tachiyomi.domain.library.service.LibraryPreferences.Companion.MARK_DUPLICATE_CHAPTER_READ_EXISTING
 import tachiyomi.domain.library.service.LibraryPreferences.Companion.MARK_DUPLICATE_CHAPTER_READ_NEW
 import tachiyomi.i18n.MR
+import tachiyomi.i18n.shin.ShinMR
 import tachiyomi.i18n.sy.SYMR
 import tachiyomi.presentation.core.i18n.pluralStringResource
 import tachiyomi.presentation.core.i18n.stringResource
@@ -127,8 +129,13 @@ object SettingsLibraryScreen : SearchableSettings {
         val autoUpdateIntervalPref = libraryPreferences.autoUpdateInterval()
         val autoUpdateCategoriesPref = libraryPreferences.updateCategories()
         val autoUpdateCategoriesExcludePref = libraryPreferences.updateCategoriesExclude()
+        val remoteUpdaterUrlPref = libraryPreferences.remoteUpdaterUrl()
 
         val autoUpdateInterval by autoUpdateIntervalPref.collectAsState()
+
+        // Shin -->
+        val remoteUpdaterUrl by remoteUpdaterUrlPref.collectAsState()
+        // Shin <--
 
         val included by autoUpdateCategoriesPref.collectAsState()
         val excluded by autoUpdateCategoriesExcludePref.collectAsState()
@@ -224,6 +231,23 @@ object SettingsLibraryScreen : SearchableSettings {
                 Preference.PreferenceItem.SwitchPreference(
                     preference = libraryPreferences.newShowUpdatesCount(),
                     title = stringResource(MR.strings.pref_library_update_show_tab_badge),
+                ),
+                Preference.PreferenceItem.ListPreference(
+                    preference = remoteUpdaterUrlPref,
+                    entries = persistentMapOf(
+                        "" to stringResource(ShinMR.strings.remote_updater_none),
+                        Constants.REMOTE_UPDATER_DEFAULT_URL to stringResource(ShinMR.strings.remote_updater_default)
+                    ),
+                    title = stringResource(ShinMR.strings.remote_updater_settings_title),
+                    subtitle = stringResource(ShinMR.strings.remote_updater_settings_subtitle)
+                        + "\n"
+                        + stringResource(
+                            ShinMR.strings.remote_updater_settings_server,
+                            when(remoteUpdaterUrl) {
+                                Constants.REMOTE_UPDATER_DEFAULT_URL -> stringResource(ShinMR.strings.remote_updater_default)
+                                else ->stringResource(ShinMR.strings.remote_updater_none)
+                            }
+                        )
                 ),
             ),
         )

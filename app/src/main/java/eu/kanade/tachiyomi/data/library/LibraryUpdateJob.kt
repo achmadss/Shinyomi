@@ -137,8 +137,7 @@ class LibraryUpdateJob(private val context: Context, workerParams: WorkerParamet
     override suspend fun doWork(): Result {
         if (tags.contains(WORK_NAME_AUTO)) {
             if (Build.VERSION.SDK_INT < Build.VERSION_CODES.P) {
-                val preferences = Injekt.get<LibraryPreferences>()
-                val restrictions = preferences.autoUpdateDeviceRestrictions().get()
+                val restrictions = libraryPreferences.autoUpdateDeviceRestrictions().get()
                 if ((DEVICE_ONLY_ON_WIFI in restrictions) && !context.isConnectedToWifi()) {
                     return Result.retry()
                 }
@@ -805,6 +804,11 @@ class LibraryUpdateJob(private val context: Context, workerParams: WorkerParamet
             groupExtra: String? = null,
             // SY <--
         ): Boolean {
+            val libraryPreferences = Injekt.get<LibraryPreferences>()
+            if (libraryPreferences.remoteUpdaterUrl().get().isNotEmpty()) {
+                return LibraryUpdateService.start(context, category, group, groupExtra)
+            }
+
             val wm = context.workManager
             // Check if the LibraryUpdateJob is already running
             if (wm.isRunning(TAG)) {
@@ -860,6 +864,12 @@ class LibraryUpdateJob(private val context: Context, workerParams: WorkerParamet
         }
 
         fun stop(context: Context) {
+            val libraryPreferences = Injekt.get<LibraryPreferences>()
+            if (libraryPreferences.remoteUpdaterUrl().get().isNotEmpty()) {
+                LibraryUpdateService.stop(context)
+                return
+            }
+
             val wm = context.workManager
             val workQuery = WorkQuery.Builder.fromTags(listOf(TAG))
                 .addStates(listOf(WorkInfo.State.RUNNING))

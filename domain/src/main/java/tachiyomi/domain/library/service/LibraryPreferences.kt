@@ -1,5 +1,6 @@
 package tachiyomi.domain.library.service
 
+import tachiyomi.core.common.Constants
 import tachiyomi.core.common.preference.Preference
 import tachiyomi.core.common.preference.PreferenceStore
 import tachiyomi.core.common.preference.TriState
@@ -9,7 +10,6 @@ import tachiyomi.domain.library.model.LibraryDisplayMode
 import tachiyomi.domain.library.model.LibraryGroup
 import tachiyomi.domain.library.model.LibrarySort
 import tachiyomi.domain.manga.model.Manga
-import tachiyomi.domain.watcher.EXTERNAL_WATCHER_HOST_DISABLED
 
 class LibraryPreferences(
     private val preferenceStore: PreferenceStore,
@@ -219,6 +219,10 @@ class LibraryPreferences(
     fun groupLibraryBy() = preferenceStore.getInt("group_library_by", LibraryGroup.BY_DEFAULT)
 
     // SY <--
+
+    // Shin -->
+    fun remoteUpdaterUrl() = preferenceStore.getString("remote_updater_url")
+    // Shin <--
 
 
     companion object {
