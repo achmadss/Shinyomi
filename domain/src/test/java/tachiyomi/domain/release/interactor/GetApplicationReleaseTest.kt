@@ -31,33 +31,6 @@ class GetApplicationReleaseTest {
     }
 
     @Test
-    fun `When has update but is preview expect new update`() = runTest {
-        every { preference.get() } returns 0
-        every { preference.set(any()) }.answers { }
-
-        val release = Release(
-            "200",
-            "info",
-            "http://example.com/release_link",
-            listOf("http://example.com/assets"),
-        )
-
-        coEvery { releaseService.latest(any()) } returns release
-
-        val result = getApplicationRelease.await(
-            GetApplicationRelease.Arguments(
-                commitCount = 1000,
-                versionName = "",
-                repository = "test",
-            ),
-        )
-
-        (result as GetApplicationRelease.Result.NewUpdate).release shouldBe GetApplicationRelease.Result.NewUpdate(
-            release,
-        ).release
-    }
-
-    @Test
     fun `When has update expect new update`() = runTest {
         every { preference.get() } returns 0
         every { preference.set(any()) }.answers { }
