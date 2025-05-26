@@ -1,6 +1,5 @@
 package eu.kanade.tachiyomi.ui.home
 
-import android.annotation.SuppressLint
 import androidx.activity.compose.PredictiveBackHandler
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
@@ -12,14 +11,14 @@ import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.layout.consumeWindowInsets
+import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.NavigationRailItem
-import androidx.compose.material3.ScaffoldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
@@ -31,15 +30,11 @@ import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.Density
-import androidx.compose.ui.unit.LayoutDirection
-import androidx.compose.ui.unit.dp
 import androidx.compose.ui.util.fastFilter
 import androidx.compose.ui.util.fastForEach
 import androidx.compose.ui.util.lerp
@@ -89,9 +84,6 @@ object HomeScreen : Screen() {
 
     @Suppress("ConstPropertyName")
     private const val TabNavigatorKey = "HomeTabs"
-
-    @SuppressLint("ComposeCompositionLocalUsage")
-    val LocalHomeScreenInsetsProvider = staticCompositionLocalOf { WindowInsets(0.dp) }
 
     private val TABS = listOf(
         LibraryTab,
@@ -155,54 +147,17 @@ object HomeScreen : Screen() {
                             }
                         }
                     },
+                    contentWindowInsets = WindowInsets(0),
                 ) { contentPadding ->
                     Box(
                         modifier = Modifier
+                            .padding(contentPadding)
+                            .consumeWindowInsets(contentPadding)
                             .graphicsLayer {
                                 scaleX = scale
                                 scaleY = scale
-                            }
-                            .windowInsetsPadding(
-                                remember {
-                                    object : WindowInsets {
-                                        override fun getLeft(density: Density, layoutDirection: LayoutDirection): Int {
-                                            return with(density) {
-                                                contentPadding.calculateLeftPadding(layoutDirection).roundToPx()
-                                            }
-                                        }
-
-                                        override fun getRight(density: Density, layoutDirection: LayoutDirection): Int {
-                                            return with(density) {
-                                                contentPadding.calculateRightPadding(layoutDirection).roundToPx()
-                                            }
-                                        }
-
-                                        override fun getBottom(density: Density): Int = 0
-
-                                        override fun getTop(density: Density): Int = 0
-                                    }
-                                },
-                            ),
+                            },
                     ) {
-                        val contentWindowInsets = ScaffoldDefaults.contentWindowInsets
-                        val insets = remember {
-                            object : WindowInsets {
-                                override fun getBottom(density: Density): Int {
-                                    return with(density) {
-                                        contentPadding.calculateBottomPadding().roundToPx()
-                                            .plus(contentWindowInsets.getBottom(density))
-                                    }
-                                }
-
-                                override fun getTop(density: Density): Int {
-                                    return with(density) { contentPadding.calculateTopPadding().roundToPx() }
-                                }
-
-                                override fun getLeft(density: Density, layoutDirection: LayoutDirection): Int = 0
-
-                                override fun getRight(density: Density, layoutDirection: LayoutDirection): Int = 0
-                            }
-                        }
                         AnimatedContent(
                             targetState = tabNavigator.current,
                             transitionSpec = {
@@ -211,10 +166,8 @@ object HomeScreen : Screen() {
                             },
                             label = "tabContent",
                         ) {
-                            CompositionLocalProvider(LocalHomeScreenInsetsProvider provides insets) {
-                                tabNavigator.saveableState(key = "currentTab", it) {
-                                    it.Content()
-                                }
+                            tabNavigator.saveableState(key = "currentTab", it) {
+                                it.Content()
                             }
                         }
                     }

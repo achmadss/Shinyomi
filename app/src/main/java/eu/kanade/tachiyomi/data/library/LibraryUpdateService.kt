@@ -103,6 +103,7 @@ data class ServerLiveUpdatePayload(
         val status: Int,
         val thumbnailUrl: String?,
     )
+
     @Serializable
     data class LiveChapterDto(
         val url: String,
@@ -176,7 +177,7 @@ class LibraryUpdateService : Service() {
         logcat(LogPriority.INFO, tag = TAG) { "LibraryUpdateService onStartCommand." }
 
         val action = intent?.action ?: return START_NOT_STICKY
-        when(action) {
+        when (action) {
             ACTION_START_SERVICE -> {
                 if (isUpdateActive.load()) {
                     logcat(LogPriority.INFO, tag = TAG) { "Library remote update is already in progress. Ignoring new start request (Start ID: $startId)." }
@@ -229,7 +230,6 @@ class LibraryUpdateService : Service() {
                             logcat(LogPriority.INFO, tag = TAG) { "No manga to update. Service will stop." }
                             stopAndCleanup(startId)
                         }
-
                     } catch (e: Exception) {
                         logcat(LogPriority.ERROR, e, tag = TAG) { "Error during addMangaToQueue or WebSocket connection in LibraryUpdateService" }
                         stopAndCleanup(startId)
@@ -362,11 +362,10 @@ class LibraryUpdateService : Service() {
                         if (newUpdates.isNotEmpty()) {
                             notifier.showUpdateNotifications(newUpdates)
                         } else {
-
+                            notifier.showUpdateNoNewChapterNotifications()
                         }
                         stopAndCleanup()
                     }
-
                 } catch (e: Exception) {
                     logcat(LogPriority.ERROR, e, tag = TAG) { "Error processing WebSocket message: $text" }
                     // Consider if service should stop on all message processing errors
@@ -451,7 +450,7 @@ class LibraryUpdateService : Service() {
     private suspend fun syncMangaAndChapters(
         manga: Manga,
         payload: ServerLiveUpdatePayload,
-        fetchWindow: Pair<Long, Long>
+        fetchWindow: Pair<Long, Long>,
     ): List<Chapter> {
         val source = sourceManager.getOrStub(manga.source)
         if (source is MergedSource) {
@@ -484,7 +483,7 @@ class LibraryUpdateService : Service() {
                 url = it.url,
                 date_upload = it.dateUpload,
                 chapter_number = it.chapterNumber,
-                scanlator = it.scanlator
+                scanlator = it.scanlator,
             )
         }
         return syncChaptersWithSource.await(chapters, dbManga, source, false, fetchWindow)

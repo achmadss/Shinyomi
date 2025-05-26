@@ -236,18 +236,18 @@ object SettingsLibraryScreen : SearchableSettings {
                     preference = remoteUpdaterUrlPref,
                     entries = persistentMapOf(
                         "" to stringResource(ShinMR.strings.remote_updater_none),
-                        Constants.REMOTE_UPDATER_DEFAULT_URL to stringResource(ShinMR.strings.remote_updater_default)
+                        Constants.REMOTE_UPDATER_DEFAULT_URL to stringResource(ShinMR.strings.remote_updater_default),
                     ),
                     title = stringResource(ShinMR.strings.remote_updater_settings_title),
-                    subtitle = stringResource(ShinMR.strings.remote_updater_settings_subtitle)
-                        + "\n"
-                        + stringResource(
+                    subtitle = stringResource(ShinMR.strings.remote_updater_settings_subtitle) +
+                        "\n" +
+                        stringResource(
                             ShinMR.strings.remote_updater_settings_server,
-                            when(remoteUpdaterUrl) {
+                            when (remoteUpdaterUrl) {
                                 Constants.REMOTE_UPDATER_DEFAULT_URL -> stringResource(ShinMR.strings.remote_updater_default)
-                                else ->stringResource(ShinMR.strings.remote_updater_none)
-                            }
-                        )
+                                else -> stringResource(ShinMR.strings.remote_updater_none)
+                            },
+                        ),
                 ),
             ),
         )
@@ -320,5 +320,4 @@ object SettingsLibraryScreen : SearchableSettings {
         )
     }
     // SY <--
-
 }

@@ -1,6 +1,5 @@
 package tachiyomi.domain.library.service
 
-import tachiyomi.core.common.Constants
 import tachiyomi.core.common.preference.Preference
 import tachiyomi.core.common.preference.PreferenceStore
 import tachiyomi.core.common.preference.TriState
@@ -223,7 +222,6 @@ class LibraryPreferences(
     // Shin -->
     fun remoteUpdaterUrl() = preferenceStore.getString("remote_updater_url")
     // Shin <--
-
 
     companion object {
         const val DEVICE_ONLY_ON_WIFI = "wifi"

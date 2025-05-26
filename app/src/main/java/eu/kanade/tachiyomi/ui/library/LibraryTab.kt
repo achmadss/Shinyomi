@@ -103,7 +103,6 @@ data object LibraryTab : Tab {
         val context = LocalContext.current
         val scope = rememberCoroutineScope()
         val haptic = LocalHapticFeedback.current
-        val homeScreenInsets = HomeScreen.LocalHomeScreenInsetsProvider.current
 
         val screenModel = rememberScreenModel { LibraryScreenModel() }
         val settingsScreenModel = rememberScreenModel { LibrarySettingsScreenModel() }
@@ -217,7 +216,6 @@ data object LibraryTab : Tab {
                 )
             },
             snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
-            contentWindowInsets = homeScreenInsets
         ) { contentPadding ->
             when {
                 state.isLoading -> LoadingScreen(Modifier.padding(contentPadding))

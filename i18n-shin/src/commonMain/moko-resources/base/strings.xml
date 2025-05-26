@@ -9,4 +9,6 @@
     <string name="remote_updater_info_disable" translatable="false">Disabling remote updater will cancel any ongoing remote updates</string>
     <string name="remote_updater_none" translatable="false">None</string>
     <string name="remote_updater_default" translatable="false">achmad.dev</string>
+
+    <string name="notification_no_new_chapter_found" translatable="false">No new chapter found</string>
 </resources>

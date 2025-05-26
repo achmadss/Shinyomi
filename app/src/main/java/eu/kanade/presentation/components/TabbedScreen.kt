@@ -22,7 +22,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.zIndex
 import dev.icerock.moko.resources.StringResource
-import eu.kanade.tachiyomi.ui.home.HomeScreen
 import kotlinx.collections.immutable.ImmutableList
 import kotlinx.collections.immutable.persistentListOf
 import kotlinx.coroutines.launch
@@ -40,7 +39,6 @@ fun TabbedScreen(
 ) {
     val scope = rememberCoroutineScope()
     val snackbarHostState = remember { SnackbarHostState() }
-    val homeScreenInsets = HomeScreen.LocalHomeScreenInsetsProvider.current
 
     Scaffold(
         topBar = {
@@ -56,7 +54,6 @@ fun TabbedScreen(
             )
         },
         snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
-        contentWindowInsets = homeScreenInsets
     ) { contentPadding ->
         Column(
             modifier = Modifier.padding(
