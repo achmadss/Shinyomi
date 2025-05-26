@@ -17,7 +17,6 @@ import exh.source.getMainSource
 import exh.util.dropBlank
 import exh.util.floor
 import exh.util.nullIfZero
-import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import okhttp3.FormBody
 import okhttp3.Headers
@@ -26,7 +25,6 @@ import okhttp3.Request
 import okhttp3.RequestBody
 import okhttp3.RequestBody.Companion.toRequestBody
 import org.jsoup.parser.Parser
-import tachiyomi.domain.UnsortedPreferences
 import tachiyomi.domain.source.service.SourceManager
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
@@ -89,7 +87,7 @@ class MdUtil {
 
         fun cleanDescription(string: String): String {
             return Parser.unescapeEntities(string, false)
-                .substringBefore("---")
+                .substringBefore("\n---")
                 .replace(markdownLinksRegex, "$1")
                 .replace(markdownItalicBoldRegex, "$1")
                 .replace(markdownItalicRegex, "$1")
@@ -232,9 +230,9 @@ class MdUtil {
             return codeVerifier ?: PkceUtil.generateCodeVerifier().also { codeVerifier = it }
         }
 
-        fun getEnabledMangaDex(preferences: UnsortedPreferences, sourcePreferences: SourcePreferences = Injekt.get(), sourceManager: SourceManager = Injekt.get()): MangaDex? {
+        fun getEnabledMangaDex(sourcePreferences: SourcePreferences = Injekt.get(), sourceManager: SourceManager = Injekt.get()): MangaDex? {
             return getEnabledMangaDexs(sourcePreferences, sourceManager).let { mangadexs ->
-                preferences.preferredMangaDexId().get().toLongOrNull()?.nullIfZero()
+                sourcePreferences.preferredMangaDexId().get().toLongOrNull()?.nullIfZero()
                     ?.let { preferredMangaDexId ->
                         mangadexs.firstOrNull { it.id == preferredMangaDexId }
                     }
@@ -265,7 +263,7 @@ class MdUtil {
             } else {
                 val altTitlesDesc = altTitles
                     .joinToString("\n", "${Injekt.get<Application>().getString(R.string.alt_titles)}:\n") { "• $it" }
-                description + (if (description.isBlank()) "" else "\n\n") + altTitlesDesc
+                description + (if (description.isBlank()) "" else "\n\n") + Parser.unescapeEntities(altTitlesDesc, false)
             }
         }
     }

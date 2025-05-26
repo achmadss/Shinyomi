@@ -59,6 +59,7 @@ import cafe.adriel.voyager.navigator.currentOrThrow
 import com.google.firebase.analytics.ktx.analytics
 import com.google.firebase.ktx.Firebase
 import eu.kanade.domain.base.BasePreferences
+import eu.kanade.domain.source.interactor.GetIncognitoState
 import eu.kanade.presentation.components.AppStateBanners
 import eu.kanade.presentation.components.DownloadedOnlyBannerBackgroundColor
 import eu.kanade.presentation.components.IncognitoModeBannerBackgroundColor
@@ -93,6 +94,7 @@ import exh.log.DebugModeOverlay
 import exh.source.BlacklistedSources
 import exh.source.EH_SOURCE_ID
 import exh.source.EXH_SOURCE_ID
+import exh.source.ExhPreferences
 import exh.syDebugVersion
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.callbackFlow
@@ -107,7 +109,6 @@ import mihon.core.migration.Migrator
 import tachiyomi.core.common.Constants
 import tachiyomi.core.common.util.lang.launchIO
 import tachiyomi.core.common.util.system.logcat
-import tachiyomi.domain.UnsortedPreferences
 import tachiyomi.domain.library.service.LibraryPreferences
 import tachiyomi.domain.release.interactor.GetApplicationRelease
 import tachiyomi.presentation.core.components.material.Scaffold
@@ -121,11 +122,13 @@ class MainActivity : BaseActivity() {
     private val preferences: BasePreferences by injectLazy()
 
     // SY -->
-    private val unsortedPreferences: UnsortedPreferences by injectLazy()
+    private val exhPreferences: ExhPreferences by injectLazy()
     // SY <--
 
     private val downloadCache: DownloadCache by injectLazy()
     private val chapterCache: ChapterCache by injectLazy()
+
+    private val getIncognitoState: GetIncognitoState by injectLazy()
 
     // To be checked by splash screen. If true then splash screen will be removed.
     var ready = false
@@ -186,7 +189,7 @@ class MainActivity : BaseActivity() {
         setComposeContent {
             val context = LocalContext.current
 
-            val incognito by preferences.incognitoMode().collectAsState()
+            var incognito by remember { mutableStateOf(getIncognitoState.await(null)) }
             val downloadOnly by preferences.downloadedOnly().collectAsState()
             val indexing by downloadCache.isInitializing.collectAsState()
 
@@ -224,8 +227,8 @@ class MainActivity : BaseActivity() {
                         // SY -->
                         initWhenIdle {
                             // Upload settings
-                            if (unsortedPreferences.enableExhentai().get() &&
-                                unsortedPreferences.exhShowSettingsUploadWarning().get()
+                            if (exhPreferences.enableExhentai().get() &&
+                                exhPreferences.exhShowSettingsUploadWarning().get()
                             ) {
                                 runExhConfigureDialog = true
                             }
@@ -235,6 +238,11 @@ class MainActivity : BaseActivity() {
                         }
                         // SY <--
                     }
+                }
+                LaunchedEffect(navigator.lastItem) {
+                    (navigator.lastItem as? BrowseSourceScreen)?.sourceId
+                        .let(getIncognitoState::subscribe)
+                        .collectLatest { incognito = it }
                 }
 
                 val scaffoldInsets = WindowInsets.navigationBars.only(WindowInsetsSides.Horizontal)
@@ -346,7 +354,7 @@ class MainActivity : BaseActivity() {
         }
 
         // SY -->
-        if (!unsortedPreferences.isHentaiEnabled().get()) {
+        if (!exhPreferences.isHentaiEnabled().get()) {
             BlacklistedSources.HIDDEN_SOURCES += EH_SOURCE_ID
             BlacklistedSources.HIDDEN_SOURCES += EXH_SOURCE_ID
         }

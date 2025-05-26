@@ -27,6 +27,7 @@ import cafe.adriel.voyager.navigator.currentOrThrow
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import eu.kanade.domain.manga.model.hasCustomCover
 import eu.kanade.domain.manga.model.toSManga
+import eu.kanade.domain.source.service.SourcePreferences
 import eu.kanade.presentation.category.components.ChangeCategoryDialog
 import eu.kanade.presentation.components.NavigatorAdaptiveSheet
 import eu.kanade.presentation.manga.ChapterSettingsDialog
@@ -40,7 +41,6 @@ import eu.kanade.presentation.manga.components.SetIntervalDialog
 import eu.kanade.presentation.util.AssistContentScreen
 import eu.kanade.presentation.util.Screen
 import eu.kanade.presentation.util.isTabletUi
-import eu.kanade.tachiyomi.source.CatalogueSource
 import eu.kanade.tachiyomi.source.Source
 import eu.kanade.tachiyomi.source.isLocalOrStub
 import eu.kanade.tachiyomi.source.online.HttpSource
@@ -52,6 +52,7 @@ import eu.kanade.tachiyomi.ui.browse.source.globalsearch.GlobalSearchScreen
 import eu.kanade.tachiyomi.ui.category.CategoryScreen
 import eu.kanade.tachiyomi.ui.home.HomeScreen
 import eu.kanade.tachiyomi.ui.manga.merged.EditMergedSettingsDialog
+import eu.kanade.tachiyomi.ui.manga.notes.MangaNotesScreen
 import eu.kanade.tachiyomi.ui.manga.track.TrackInfoDialogHomeScreen
 import eu.kanade.tachiyomi.ui.reader.ReaderActivity
 import eu.kanade.tachiyomi.ui.setting.SettingsScreen
@@ -59,13 +60,10 @@ import eu.kanade.tachiyomi.ui.webview.WebViewScreen
 import eu.kanade.tachiyomi.util.system.copyToClipboard
 import eu.kanade.tachiyomi.util.system.toShareIntent
 import eu.kanade.tachiyomi.util.system.toast
-import exh.md.similar.MangaDexSimilarScreen
 import exh.pagepreview.PagePreviewScreen
-import exh.pref.DelegateSourcePreferences
 import exh.recs.RecommendsScreen
 import exh.source.MERGED_SOURCE_ID
 import exh.source.getMainSource
-import exh.source.isMdBasedSource
 import exh.ui.ifSourcesLoaded
 import exh.ui.metadata.MetadataViewScreen
 import kotlinx.coroutines.CancellationException
@@ -80,7 +78,6 @@ import tachiyomi.core.common.util.lang.launchUI
 import tachiyomi.core.common.util.lang.withIOContext
 import tachiyomi.core.common.util.lang.withNonCancellableContext
 import tachiyomi.core.common.util.system.logcat
-import tachiyomi.domain.UnsortedPreferences
 import tachiyomi.domain.chapter.model.Chapter
 import tachiyomi.domain.manga.model.Manga
 import tachiyomi.domain.source.service.SourceManager
@@ -158,7 +155,7 @@ class MangaScreen(
             isTabletUi = isTabletUi(),
             chapterSwipeStartAction = screenModel.chapterSwipeStartAction,
             chapterSwipeEndAction = screenModel.chapterSwipeEndAction,
-            onBackClicked = navigator::pop,
+            navigateUp = navigator::pop,
             onChapterClicked = { openChapter(context, it) },
             onDownloadChapter = screenModel::runChapterDownloadActions.takeIf { !successState.source.isLocalOrStub() },
             onAddToLibraryClicked = {
@@ -209,12 +206,13 @@ class MangaScreen(
                 successState.manga.favorite
             },
             previewsRowCount = successState.previewsRowCount,
+            onEditNotesClicked = { navigator.push(MangaNotesScreen(manga = successState.manga)) },
             // SY -->
             onMigrateClicked = { migrateManga(navigator, screenModel.manga!!) }.takeIf { successState.manga.favorite },
             onMetadataViewerClicked = { openMetadataViewer(navigator, successState.manga) },
             onEditInfoClicked = screenModel::showEditMangaInfoDialog,
             onRecommendClicked = {
-                openRecommends(context, navigator, screenModel.source?.getMainSource(), successState.manga)
+                openRecommends(navigator, screenModel.source?.getMainSource(), successState.manga)
             },
             onMergedSettingsClicked = screenModel::showEditMergedSettingsDialog,
             onMergeClicked = { openSmartSearch(navigator, successState.manga) },
@@ -234,7 +232,6 @@ class MangaScreen(
             onChapterSelected = screenModel::toggleSelection,
             onAllChapterSelected = screenModel::toggleAllSelection,
             onInvertSelection = screenModel::invertSelection,
-            onWatchClicked = screenModel::toggleExternalWatcher,
         )
 
         var showScanlatorsDialog by remember { mutableStateOf(false) }
@@ -264,12 +261,13 @@ class MangaScreen(
 
             is MangaScreenModel.Dialog.DuplicateManga -> {
                 DuplicateMangaDialog(
+                    duplicates = dialog.duplicates,
                     onDismissRequest = onDismissRequest,
-                    onConfirm = { screenModel.toggleFavorite() },
-                    onOpenManga = { navigator.push(MangaScreen(dialog.duplicate.id)) },
+                    onConfirm = { screenModel.toggleFavorite(onRemoved = {}, checkDuplicate = false) },
+                    onOpenManga = { navigator.push(MangaScreen(it.id)) },
                     onMigrate = {
                         // SY -->
-                        migrateManga(navigator, dialog.duplicate, screenModel.manga!!.id)
+                        migrateManga(navigator, it, screenModel.manga!!.id)
                         // SY <--
                     },
                 )
@@ -472,13 +470,14 @@ class MangaScreen(
     }
 
     // SY -->
+
     /**
      * Initiates source migration for the specific manga.
      */
     private fun migrateManga(navigator: Navigator, manga: Manga, toMangaId: Long? = null) {
         // SY -->
         PreMigrationScreen.navigateToMigration(
-            Injekt.get<UnsortedPreferences>().skipPreMigration().get(),
+            Injekt.get<SourcePreferences>().skipPreMigration().get(),
             navigator,
             manga.id,
             toMangaId,
@@ -551,28 +550,11 @@ class MangaScreen(
     // EXH <--
 
     // AZ -->
-    private fun openRecommends(context: Context, navigator: Navigator, source: Source?, manga: Manga) {
+    private fun openRecommends(navigator: Navigator, source: Source?, manga: Manga) {
         source ?: return
-        if (source.isMdBasedSource() && Injekt.get<DelegateSourcePreferences>().delegateSources().get()) {
-            MaterialAlertDialogBuilder(context)
-                .setTitle(SYMR.strings.az_recommends.getString(context))
-                .setSingleChoiceItems(
-                    arrayOf(
-                        context.stringResource(SYMR.strings.mangadex_similar),
-                        context.stringResource(SYMR.strings.community_recommendations),
-                    ),
-                    -1,
-                ) { dialog, index ->
-                    dialog.dismiss()
-                    when (index) {
-                        0 -> navigator.push(MangaDexSimilarScreen(manga.id, source.id))
-                        1 -> navigator.push(RecommendsScreen(manga.id, source.id))
-                    }
-                }
-                .show()
-        } else if (source is CatalogueSource) {
-            navigator.push(RecommendsScreen(manga.id, source.id))
-        }
+        RecommendsScreen.Args.SingleSourceManga(manga.id, source.id)
+            .let(::RecommendsScreen)
+            .let(navigator::push)
     }
     // AZ <--
 }

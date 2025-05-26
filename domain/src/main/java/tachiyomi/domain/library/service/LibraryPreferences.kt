@@ -9,7 +9,6 @@ import tachiyomi.domain.library.model.LibraryDisplayMode
 import tachiyomi.domain.library.model.LibraryGroup
 import tachiyomi.domain.library.model.LibrarySort
 import tachiyomi.domain.manga.model.Manga
-import tachiyomi.domain.watcher.EXTERNAL_WATCHER_HOST_DISABLED
 
 class LibraryPreferences(
     private val preferenceStore: PreferenceStore,
@@ -61,6 +60,8 @@ class LibraryPreferences(
         false,
     )
 
+    fun markDuplicateReadChapterAsRead() = preferenceStore.getStringSet("mark_duplicate_read_chapter_read", emptySet())
+
     // region Filter
 
     fun filterDownloaded() = preferenceStore.getEnum(
@@ -95,8 +96,6 @@ class LibraryPreferences(
         "pref_filter_library_lewd_v2",
         TriState.DISABLED,
     )
-
-    fun libraryReadDuplicateChapters() = preferenceStore.getBoolean("pref_library_mark_duplicate_chapters", false)
     // SY <--
 
     fun filterTracking(id: Int) = preferenceStore.getEnum(
@@ -110,6 +109,8 @@ class LibraryPreferences(
 
     fun downloadBadge() = preferenceStore.getBoolean("display_download_badge", false)
 
+    fun unreadBadge() = preferenceStore.getBoolean("display_unread_badge", true)
+
     fun localBadge() = preferenceStore.getBoolean("display_local_badge", true)
 
     fun languageBadge() = preferenceStore.getBoolean("display_language_badge", false)
@@ -121,7 +122,7 @@ class LibraryPreferences(
 
     // region Category
 
-    fun defaultCategory() = preferenceStore.getInt("default_category", -1)
+    fun defaultCategory() = preferenceStore.getInt(DEFAULT_CATEGORY_PREF_KEY, -1)
 
     fun lastUsedCategory() = preferenceStore.getInt(Preference.appStateKey("last_used_category"), 0)
 
@@ -131,12 +132,9 @@ class LibraryPreferences(
 
     fun categorizedDisplaySettings() = preferenceStore.getBoolean("categorized_display", false)
 
-    fun updateCategories() = preferenceStore.getStringSet("library_update_categories", emptySet())
+    fun updateCategories() = preferenceStore.getStringSet(LIBRARY_UPDATE_CATEGORIES_PREF_KEY, emptySet())
 
-    fun updateCategoriesExclude() = preferenceStore.getStringSet(
-        "library_update_categories_exclude",
-        emptySet(),
-    )
+    fun updateCategoriesExclude() = preferenceStore.getStringSet(LIBRARY_UPDATE_CATEGORIES_EXCLUDE_PREF_KEY, emptySet())
 
     // endregion
 
@@ -200,6 +198,8 @@ class LibraryPreferences(
         ChapterSwipeAction.ToggleRead,
     )
 
+    fun updateMangaTitles() = preferenceStore.getBoolean("pref_update_library_manga_titles", false)
+
     // endregion
 
     enum class ChapterSwipeAction {
@@ -220,13 +220,7 @@ class LibraryPreferences(
     // SY <--
 
     // Shin -->
-
-    fun enableExternalWatcher() = preferenceStore.getBoolean("pref_enable_external_watcher", false)
-
-    fun externalWatcherInterval() = preferenceStore.getLong("pref_external_watcher_interval", (5L).times(60L)) // in seconds
-
-    fun externalWatcherHost() = preferenceStore.getString("pref_external_watcher_host", EXTERNAL_WATCHER_HOST_DISABLED)
-
+    fun remoteUpdaterUrl() = preferenceStore.getString("remote_updater_url")
     // Shin <--
 
     companion object {
@@ -238,5 +232,17 @@ class LibraryPreferences(
         const val MANGA_HAS_UNREAD = "manga_fully_read"
         const val MANGA_NON_READ = "manga_started"
         const val MANGA_OUTSIDE_RELEASE_PERIOD = "manga_outside_release_period"
+
+        const val MARK_DUPLICATE_CHAPTER_READ_NEW = "new"
+        const val MARK_DUPLICATE_CHAPTER_READ_EXISTING = "existing"
+
+        const val DEFAULT_CATEGORY_PREF_KEY = "default_category"
+        private const val LIBRARY_UPDATE_CATEGORIES_PREF_KEY = "library_update_categories"
+        private const val LIBRARY_UPDATE_CATEGORIES_EXCLUDE_PREF_KEY = "library_update_categories_exclude"
+        val categoryPreferenceKeys = setOf(
+            DEFAULT_CATEGORY_PREF_KEY,
+            LIBRARY_UPDATE_CATEGORIES_PREF_KEY,
+            LIBRARY_UPDATE_CATEGORIES_EXCLUDE_PREF_KEY,
+        )
     }
 }

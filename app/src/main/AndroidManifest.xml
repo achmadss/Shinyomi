@@ -239,17 +239,16 @@
         </service>
 
         <service
+            android:name=".data.library.LibraryUpdateService"
+            android:enabled="true"
+            android:exported="false"
+            android:foregroundServiceType="dataSync">
+        </service>
+
+        <service
             android:name="androidx.work.impl.foreground.SystemForegroundService"
             android:foregroundServiceType="dataSync"
             tools:node="merge" />
-
-        <service
-            android:name="eu.kanade.core.firebase.TachiyomiMessagingService"
-            android:exported="false">
-            <intent-filter>
-                <action android:name="com.google.firebase.MESSAGING_EVENT" />
-            </intent-filter>
-        </service>
 
         <provider
             android:name="androidx.core.content.FileProvider"
@@ -367,7 +366,7 @@
                 <data android:scheme="https" />
                 <data android:scheme="http" />
 
-                <data android:host="pururin.io" />
+                <data android:host="pururin.me" />
 
                 <data android:pathPattern="/gallery/..*" />
             </intent-filter>
@@ -421,6 +420,10 @@
                     android:scheme="tachiyomisy" />
             </intent-filter>
         </activity>
+
+        <activity
+            android:name="com.journeyapps.barcodescanner.CaptureActivity"
+            tools:remove="screenOrientation" />
     </application>
 
     <uses-sdk tools:overrideLibrary="rikka.shizuku.api"

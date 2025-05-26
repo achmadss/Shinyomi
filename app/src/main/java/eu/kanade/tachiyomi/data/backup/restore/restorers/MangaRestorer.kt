@@ -139,13 +139,15 @@ class MangaRestorer(
             mangasQueries.update(
                 source = manga.source,
                 url = manga.url,
-                artist = manga.artist,
-                author = manga.author,
-                description = manga.description,
-                genre = manga.genre?.joinToString(separator = ", "),
-                title = manga.title,
-                status = manga.status,
-                thumbnailUrl = manga.thumbnailUrl,
+                // SY -->
+                artist = manga.ogArtist,
+                author = manga.ogAuthor,
+                description = manga.ogDescription,
+                genre = manga.ogGenre?.joinToString(separator = ", "),
+                title = manga.ogTitle,
+                status = manga.ogStatus,
+                thumbnailUrl = manga.ogThumbnailUrl,
+                // SY <--
                 favorite = manga.favorite,
                 lastUpdate = manga.lastUpdate,
                 nextUpdate = null,
@@ -159,6 +161,7 @@ class MangaRestorer(
                 updateStrategy = manga.updateStrategy.let(UpdateStrategyColumnAdapter::encode),
                 version = manga.version,
                 isSyncing = 1,
+                notes = manga.notes,
             )
         }
         return manga
@@ -274,13 +277,15 @@ class MangaRestorer(
             mangasQueries.insert(
                 source = manga.source,
                 url = manga.url,
-                artist = manga.artist,
-                author = manga.author,
-                description = manga.description,
-                genre = manga.genre,
-                title = manga.title,
-                status = manga.status,
-                thumbnailUrl = manga.thumbnailUrl,
+                // SY -->
+                artist = manga.ogArtist,
+                author = manga.ogAuthor,
+                description = manga.ogDescription,
+                genre = manga.ogGenre,
+                title = manga.ogTitle,
+                status = manga.ogStatus,
+                thumbnailUrl = manga.ogThumbnailUrl,
+                // SY <--
                 favorite = manga.favorite,
                 lastUpdate = manga.lastUpdate,
                 nextUpdate = 0L,
@@ -292,6 +297,7 @@ class MangaRestorer(
                 dateAdded = manga.dateAdded,
                 updateStrategy = manga.updateStrategy,
                 version = manga.version,
+                notes = manga.notes,
             )
             mangasQueries.selectLastInsertedRowId()
         }
@@ -447,6 +453,7 @@ class MangaRestorer(
                         track.remoteUrl,
                         track.startDate,
                         track.finishDate,
+                        track.private,
                         track.id,
                     )
                 }
@@ -455,6 +462,7 @@ class MangaRestorer(
     }
 
     // SY -->
+
     /**
      * Restore the categories from Json
      *

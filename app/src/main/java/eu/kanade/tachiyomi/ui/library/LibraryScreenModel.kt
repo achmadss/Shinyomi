@@ -42,11 +42,13 @@ import exh.md.utils.FollowStatus
 import exh.md.utils.MdUtil
 import exh.metadata.sql.models.SearchTag
 import exh.metadata.sql.models.SearchTitle
+import exh.recs.batch.RecommendationSearchHelper
 import exh.search.Namespace
 import exh.search.QueryComponent
 import exh.search.SearchEngine
 import exh.search.Text
 import exh.source.EH_SOURCE_ID
+import exh.source.ExhPreferences
 import exh.source.MERGED_SOURCE_ID
 import exh.source.isEhBasedManga
 import exh.source.isMetadataSource
@@ -61,6 +63,7 @@ import kotlinx.collections.immutable.mutate
 import kotlinx.collections.immutable.persistentListOf
 import kotlinx.collections.immutable.toImmutableList
 import kotlinx.coroutines.DelicateCoroutinesApi
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.asFlow
 import kotlinx.coroutines.flow.collectLatest
@@ -84,7 +87,6 @@ import tachiyomi.core.common.util.lang.compareToWithCollator
 import tachiyomi.core.common.util.lang.launchIO
 import tachiyomi.core.common.util.lang.launchNonCancellable
 import tachiyomi.core.common.util.lang.withIOContext
-import tachiyomi.domain.UnsortedPreferences
 import tachiyomi.domain.category.interactor.GetCategories
 import tachiyomi.domain.category.interactor.SetMangaCategories
 import tachiyomi.domain.category.model.Category
@@ -112,9 +114,6 @@ import tachiyomi.domain.source.service.SourceManager
 import tachiyomi.domain.track.interactor.GetTracks
 import tachiyomi.domain.track.interactor.GetTracksPerManga
 import tachiyomi.domain.track.model.Track
-import tachiyomi.domain.watcher.interactor.AddToExternalWatcher
-import tachiyomi.domain.watcher.interactor.RemoveFromExternalWatcher
-import tachiyomi.domain.watcher.model.ExternalWatcherRequest
 import tachiyomi.i18n.MR
 import tachiyomi.i18n.sy.SYMR
 import tachiyomi.source.local.LocalSource
@@ -145,7 +144,7 @@ class LibraryScreenModel(
     private val downloadCache: DownloadCache = Injekt.get(),
     private val trackerManager: TrackerManager = Injekt.get(),
     // SY -->
-    private val unsortedPreferences: UnsortedPreferences = Injekt.get(),
+    private val exhPreferences: ExhPreferences = Injekt.get(),
     private val sourcePreferences: SourcePreferences = Injekt.get(),
     private val getMergedMangaById: GetMergedMangaById = Injekt.get(),
     private val getTracks: GetTracks = Injekt.get(),
@@ -157,19 +156,15 @@ class LibraryScreenModel(
     private val getMergedChaptersByMangaId: GetMergedChaptersByMangaId = Injekt.get(),
     private val syncPreferences: SyncPreferences = Injekt.get(),
     // SY <--
-    // Shin -->
-    private val addToExternalWatcher: AddToExternalWatcher = Injekt.get(),
-    private val removeFromExternalWatcher: RemoveFromExternalWatcher = Injekt.get(),
-    private val basePreferences: BasePreferences = Injekt.get(),
-    // Shin <--
-) : StateScreenModel<LibraryScreenModel.State>(
-    State(isWatcherEnabled = libraryPreferences.enableExternalWatcher().get()),
-) {
+) : StateScreenModel<LibraryScreenModel.State>(State()) {
 
     var activeCategoryIndex: Int by libraryPreferences.lastUsedCategory().asState(screenModelScope)
 
     // SY -->
     val favoritesSync = FavoritesSyncHelper(preferences.context)
+    val recommendationSearch = RecommendationSearchHelper(preferences.context)
+
+    private var recommendationSearchJob: Job? = null
     // SY <--
 
     init {
@@ -265,9 +260,9 @@ class LibraryScreenModel(
 
         // SY -->
         combine(
-            unsortedPreferences.isHentaiEnabled().changes(),
+            exhPreferences.isHentaiEnabled().changes(),
             sourcePreferences.disabledSources().changes(),
-            unsortedPreferences.enableExhentai().changes(),
+            exhPreferences.enableExhentai().changes(),
         ) { isHentaiEnabled, disabledSources, enableExhentai ->
             isHentaiEnabled && (EH_SOURCE_ID.toString() !in disabledSources || enableExhentai)
         }
@@ -502,6 +497,7 @@ class LibraryScreenModel(
     private fun getLibraryItemPreferencesFlow(): Flow<ItemPreferences> {
         return combine(
             libraryPreferences.downloadBadge().changes(),
+            libraryPreferences.unreadBadge().changes(),
             libraryPreferences.localBadge().changes(),
             libraryPreferences.languageBadge().changes(),
             libraryPreferences.autoUpdateMangaRestrictions().changes(),
@@ -519,18 +515,19 @@ class LibraryScreenModel(
         ) {
             ItemPreferences(
                 downloadBadge = it[0] as Boolean,
-                localBadge = it[1] as Boolean,
-                languageBadge = it[2] as Boolean,
-                skipOutsideReleasePeriod = LibraryPreferences.MANGA_OUTSIDE_RELEASE_PERIOD in (it[3] as Set<*>),
-                globalFilterDownloaded = it[4] as Boolean,
-                filterDownloaded = it[5] as TriState,
-                filterUnread = it[6] as TriState,
-                filterStarted = it[7] as TriState,
-                filterBookmarked = it[8] as TriState,
-                filterCompleted = it[9] as TriState,
-                filterIntervalCustom = it[10] as TriState,
+                unreadBadge = it[1] as Boolean,
+                localBadge = it[2] as Boolean,
+                languageBadge = it[3] as Boolean,
+                skipOutsideReleasePeriod = LibraryPreferences.MANGA_OUTSIDE_RELEASE_PERIOD in (it[4] as Set<*>),
+                globalFilterDownloaded = it[5] as Boolean,
+                filterDownloaded = it[6] as TriState,
+                filterUnread = it[7] as TriState,
+                filterStarted = it[8] as TriState,
+                filterBookmarked = it[9] as TriState,
+                filterCompleted = it[10] as TriState,
+                filterIntervalCustom = it[11] as TriState,
                 // SY -->
-                filterLewd = it[11] as TriState,
+                filterLewd = it[12] as TriState,
                 // SY <--
             )
         }
@@ -563,7 +560,7 @@ class LibraryScreenModel(
                         } else {
                             0
                         },
-                        unreadCount = libraryManga.unreadCount,
+                        unreadCount = if (prefs.unreadBadge) libraryManga.unreadCount else 0,
                         isLocal = if (prefs.localBadge) libraryManga.manga.isLocal() else false,
                         sourceLanguage = if (prefs.languageBadge) {
                             sourceManager.getOrStub(libraryManga.manga.source).lang
@@ -774,57 +771,9 @@ class LibraryScreenModel(
     @OptIn(DelicateCoroutinesApi::class)
     fun syncMangaToDex() {
         launchIO {
-            MdUtil.getEnabledMangaDex(unsortedPreferences, sourcePreferences, sourceManager)?.let { mdex ->
+            MdUtil.getEnabledMangaDex(sourcePreferences, sourceManager)?.let { mdex ->
                 state.value.selection.fastFilter { it.manga.source in mangaDexSourceIds }.fastForEach { (manga) ->
                     mdex.updateFollowStatus(MdUtil.getMangaId(manga.url), FollowStatus.READING)
-                }
-            }
-            clearSelection()
-        }
-    }
-
-    @OptIn(DelicateCoroutinesApi::class)
-    fun addToWatcherBatch() {
-        launchIO {
-            state.value.selection.fastForEach { (manga) ->
-                if (manga.source in COMICK_SOURCE_IDS) {
-                    try {
-                        addToExternalWatcher.await(
-                            ExternalWatcherRequest(
-                                mangaTitle = manga.title,
-                                mangaId = manga.id.toInt(),
-                                mangaHid = manga.url.removePrefix("/comic/").removeSuffix("#"),
-                                interval = libraryPreferences.externalWatcherInterval().get(),
-                                deviceToken = basePreferences.fcmToken().get(),
-                            ),
-                        )
-                    } catch (e: Exception) {
-                        e.printStackTrace()
-                    }
-                }
-            }
-            clearSelection()
-        }
-    }
-
-    @OptIn(DelicateCoroutinesApi::class)
-    fun removeFromWatcherBatch() {
-        launchIO {
-            state.value.selection.fastForEach { (manga) ->
-                if (manga.source in COMICK_SOURCE_IDS) {
-                    try {
-                        removeFromExternalWatcher.await(
-                            ExternalWatcherRequest(
-                                mangaTitle = manga.title,
-                                mangaId = manga.id.toInt(),
-                                mangaHid = manga.url.removePrefix("/comic/").removeSuffix("#"),
-                                interval = libraryPreferences.externalWatcherInterval().get(),
-                                deviceToken = basePreferences.fcmToken().get(),
-                            ),
-                        )
-                    } catch (e: Exception) {
-                        e.printStackTrace()
-                    }
                 }
             }
             clearSelection()
@@ -956,6 +905,10 @@ class LibraryScreenModel(
     }
 
     // SY -->
+    fun showRecommendationSearchDialog() {
+        val mangaList = state.value.selection.map { it.manga }
+        mutableState.update { it.copy(dialog = Dialog.RecommendationSearchSheet(mangaList)) }
+    }
 
     fun getCategoryName(
         context: Context,
@@ -1280,11 +1233,16 @@ class LibraryScreenModel(
             val initialSelection: ImmutableList<CheckboxState<Category>>,
         ) : Dialog
         data class DeleteManga(val manga: List<Manga>) : Dialog
+
+        // SY -->
         data object SyncFavoritesWarning : Dialog
         data object SyncFavoritesConfirm : Dialog
+        data class RecommendationSearchSheet(val manga: List<Manga>) : Dialog
+        // SY <--
     }
 
     // SY -->
+
     /** Returns first unread chapter of a manga */
     suspend fun getFirstUnread(manga: Manga): Chapter? {
         return getNextChapters.await(manga.id).firstOrNull()
@@ -1374,18 +1332,28 @@ class LibraryScreenModel(
         }.toSortedMap(compareBy { it.order })
     }
 
+    fun runRecommendationSearch(selection: List<Manga>) {
+        recommendationSearch.runSearch(screenModelScope, selection)?.let {
+            recommendationSearchJob = it
+        }
+    }
+
+    fun cancelRecommendationSearch() {
+        recommendationSearchJob?.cancel()
+    }
+
     fun runSync() {
         favoritesSync.runSync(screenModelScope)
     }
 
     fun onAcceptSyncWarning() {
-        unsortedPreferences.exhShowSyncIntro().set(false)
+        exhPreferences.exhShowSyncIntro().set(false)
     }
 
     fun openFavoritesSyncDialog() {
         mutableState.update {
             it.copy(
-                dialog = if (unsortedPreferences.exhShowSyncIntro().get()) {
+                dialog = if (exhPreferences.exhShowSyncIntro().get()) {
                     Dialog.SyncFavoritesWarning
                 } else {
                     Dialog.SyncFavoritesConfirm
@@ -1398,6 +1366,7 @@ class LibraryScreenModel(
     @Immutable
     private data class ItemPreferences(
         val downloadBadge: Boolean,
+        val unreadBadge: Boolean,
         val localBadge: Boolean,
         val languageBadge: Boolean,
         val skipOutsideReleasePeriod: Boolean,
@@ -1431,9 +1400,6 @@ class LibraryScreenModel(
         val ogCategories: List<Category> = emptyList(),
         val groupType: Int = LibraryGroup.BY_DEFAULT,
         // SY <--
-        // Shin -->
-        val isWatcherEnabled: Boolean,
-        // Shin <--
     ) {
         private val libraryCount by lazy {
             library.values
@@ -1458,16 +1424,6 @@ class LibraryScreenModel(
 
         val showAddToMangadex: Boolean by lazy {
             selection.any { it.manga.source in mangaDexSourceIds }
-        }
-
-        val showAddToExternalWatcher: Boolean by lazy {
-            // TODO add more extensions in the future?
-            isWatcherEnabled && selection.any { it.manga.source in COMICK_SOURCE_IDS }
-        }
-
-        val showRemoveFromExternalWatcher: Boolean by lazy {
-            // logic might change in the future
-            isWatcherEnabled && selection.any { it.manga.source in COMICK_SOURCE_IDS }
         }
 
         val showResetInfo: Boolean by lazy {

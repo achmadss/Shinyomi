@@ -28,7 +28,6 @@ import androidx.compose.material.icons.outlined.BookmarkRemove
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.DoneAll
 import androidx.compose.material.icons.outlined.Download
-import androidx.compose.material.icons.outlined.Label
 import androidx.compose.material.icons.outlined.MoreVert
 import androidx.compose.material.icons.outlined.RemoveDone
 import androidx.compose.material.icons.outlined.SwapCalls
@@ -64,7 +63,6 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import tachiyomi.i18n.MR
-import tachiyomi.i18n.shin.ShinMR
 import tachiyomi.i18n.sy.SYMR
 import tachiyomi.presentation.core.i18n.stringResource
 import kotlin.time.Duration.Companion.seconds
@@ -238,9 +236,8 @@ fun LibraryBottomActionMenu(
     // SY -->
     onClickCleanTitles: (() -> Unit)?,
     onClickMigrate: (() -> Unit)?,
+    onClickCollectRecommendations: (() -> Unit)?,
     onClickAddToMangaDex: (() -> Unit)?,
-    onClickAddToWatcher: (() -> Unit)?,
-    onClickRemoveFromWatcher: (() -> Unit)?,
     onClickResetInfo: (() -> Unit)?,
     // SY <--
     modifier: Modifier = Modifier,
@@ -270,7 +267,10 @@ fun LibraryBottomActionMenu(
                 }
             }
             // SY -->
-            val showOverflow = onClickCleanTitles != null || onClickAddToMangaDex != null || onClickResetInfo != null || onClickAddToWatcher != null || onClickRemoveFromWatcher != null
+            val showOverflow = onClickCleanTitles != null ||
+                onClickAddToMangaDex != null ||
+                onClickResetInfo != null ||
+                onClickCollectRecommendations != null
             val configuration = LocalConfiguration.current
             val moveMarkPrev = remember { !configuration.isTabletUi() }
             var overFlowOpen by remember { mutableStateOf(false) }
@@ -361,22 +361,16 @@ fun LibraryBottomActionMenu(
                                 onClick = onClickMigrate,
                             )
                         }
+                        if (onClickCollectRecommendations != null) {
+                            DropdownMenuItem(
+                                text = { Text(stringResource(SYMR.strings.rec_search_short)) },
+                                onClick = onClickCollectRecommendations,
+                            )
+                        }
                         if (onClickAddToMangaDex != null) {
                             DropdownMenuItem(
                                 text = { Text(stringResource(SYMR.strings.mangadex_add_to_follows)) },
                                 onClick = onClickAddToMangaDex,
-                            )
-                        }
-                        if (onClickAddToWatcher != null) {
-                            DropdownMenuItem(
-                                text = { Text(stringResource(ShinMR.strings.external_watcher_add_batch)) },
-                                onClick = onClickAddToWatcher,
-                            )
-                        }
-                        if (onClickRemoveFromWatcher != null) {
-                            DropdownMenuItem(
-                                text = { Text(stringResource(ShinMR.strings.external_watcher_remove_batch)) },
-                                onClick = onClickRemoveFromWatcher,
                             )
                         }
                         if (onClickResetInfo != null) {

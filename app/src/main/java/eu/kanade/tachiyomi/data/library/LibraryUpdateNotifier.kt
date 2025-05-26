@@ -38,6 +38,7 @@ import tachiyomi.domain.library.model.LibraryManga
 import tachiyomi.domain.manga.model.Manga
 import tachiyomi.domain.source.service.SourceManager
 import tachiyomi.i18n.MR
+import tachiyomi.i18n.shin.ShinMR
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import java.math.RoundingMode
@@ -157,26 +158,38 @@ class LibraryUpdateNotifier(
         ) {
             setContentTitle(context.stringResource(MR.strings.notification_update_error, failed))
             setContentText(context.stringResource(MR.strings.action_show_errors))
-            setSmallIcon(R.drawable.ic_tachi)
+            setSmallIcon(R.drawable.ic_shinyomi)
 
             setContentIntent(NotificationReceiver.openErrorLogPendingActivity(context, uri))
         }
     }
 
-    fun showNoUpdateNotification(
-        manga: Manga,
-    ) {
+    fun showProgressRemoteNotification(current: Int, total: Int) {
+        progressNotificationBuilder
+            .setContentTitle(
+                context.stringResource(
+                    MR.strings.notification_updating_progress,
+                    percentFormatter.format(current.toFloat() / total),
+                ),
+            )
         context.notify(
-            Notifications.ID_WATCHER_ERROR,
-            Notifications.CHANNEL_WATCHER_ERROR,
-        ) {
-            setContentTitle("No Updates Found")
-            setContentText(manga.title)
+            Notifications.ID_LIBRARY_PROGRESS,
+            progressNotificationBuilder
+                .setProgress(total, current, false)
+                .build(),
+        )
+    }
 
-            setSmallIcon(R.drawable.ic_tachi)
+    fun showUpdateNoNewChapterNotifications() {
+        context.notify(
+            Notifications.ID_NEW_CHAPTERS,
+            Notifications.CHANNEL_NEW_CHAPTERS,
+        ) {
+            setContentTitle(context.stringResource(ShinMR.strings.notification_no_new_chapter_found))
+            setSmallIcon(R.drawable.ic_shinyomi)
             setLargeIcon(notificationBitmap)
 
-            setGroup(Notifications.GROUP_WATCHER_ERROR)
+            setGroup(Notifications.GROUP_NEW_CHAPTERS)
             setGroupAlertBehavior(NotificationCompat.GROUP_ALERT_SUMMARY)
             setGroupSummary(true)
             priority = NotificationCompat.PRIORITY_HIGH
@@ -220,7 +233,7 @@ class LibraryUpdateNotifier(
                 }
             }
 
-            setSmallIcon(R.drawable.ic_tachi)
+            setSmallIcon(R.drawable.ic_shinyomi)
             setLargeIcon(notificationBitmap)
 
             setGroup(Notifications.GROUP_NEW_CHAPTERS)
@@ -256,7 +269,7 @@ class LibraryUpdateNotifier(
             setContentText(description)
             setStyle(NotificationCompat.BigTextStyle().bigText(description))
 
-            setSmallIcon(R.drawable.ic_tachi)
+            setSmallIcon(R.drawable.ic_shinyomi)
 
             if (icon != null) {
                 setLargeIcon(icon)

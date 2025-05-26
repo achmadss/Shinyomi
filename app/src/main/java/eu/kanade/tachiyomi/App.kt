@@ -139,8 +139,6 @@ class App : Application(), DefaultLifecycleObserver, SingletonImageLoader.Factor
 
         val scope = ProcessLifecycleOwner.get().lifecycleScope
 
-        logcat(LogPriority.DEBUG, "FCM_Token") { basePreferences.fcmToken().get() }
-
         // Show notification to disable Incognito Mode when it's enabled
         basePreferences.incognitoMode().changes()
             .onEach { enabled ->
@@ -280,18 +278,16 @@ class App : Application(), DefaultLifecycleObserver, SingletonImageLoader.Factor
             try {
                 // Override the value passed as X-Requested-With in WebView requests
                 val stackTrace = Looper.getMainLooper().thread.stackTrace
-                val chromiumElement = stackTrace.find {
-                    it.className.equals(
-                        "org.chromium.base.BuildInfo",
-                        ignoreCase = true,
-                    )
+                val isChromiumCall = stackTrace.any { trace ->
+                    trace.className.equals("org.chromium.base.BuildInfo", ignoreCase = true) &&
+                        setOf("getAll", "getPackageName", "<init>").any { trace.methodName.equals(it, ignoreCase = true) }
                 }
-                if (chromiumElement?.methodName.equals("getAll", ignoreCase = true)) {
-                    return WebViewUtil.SPOOF_PACKAGE_NAME
-                }
+
+                if (isChromiumCall) return WebViewUtil.spoofedPackageName(applicationContext)
             } catch (_: Exception) {
             }
         }
+
         return super.getPackageName()
     }
 
@@ -333,7 +329,7 @@ class App : Application(), DefaultLifecycleObserver, SingletonImageLoader.Factor
                             return super.generateFileName(
                                 logLevel,
                                 timestamp,
-                            ) + "-${BuildConfig.BUILD_TYPE}.log"
+                            ) + "-${BuildConfig.BUILD_TYPE}.txt"
                         }
                     }
                     flattener { timeMillis, level, tag, message ->

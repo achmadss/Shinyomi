@@ -18,11 +18,11 @@ import androidx.work.WorkInfo
 import androidx.work.WorkQuery
 import androidx.work.WorkerParameters
 import androidx.work.workDataOf
-import eu.kanade.domain.chapter.interactor.SetReadStatus
 import eu.kanade.domain.chapter.interactor.SyncChaptersWithSource
 import eu.kanade.domain.manga.interactor.UpdateManga
 import eu.kanade.domain.manga.model.copyFrom
 import eu.kanade.domain.manga.model.toSManga
+import eu.kanade.domain.source.service.SourcePreferences
 import eu.kanade.domain.sync.SyncPreferences
 import eu.kanade.domain.track.model.toDbTrack
 import eu.kanade.domain.track.model.toDomainTrack
@@ -64,9 +64,7 @@ import tachiyomi.core.common.i18n.stringResource
 import tachiyomi.core.common.preference.getAndSet
 import tachiyomi.core.common.util.lang.withIOContext
 import tachiyomi.core.common.util.system.logcat
-import tachiyomi.domain.UnsortedPreferences
 import tachiyomi.domain.category.model.Category
-import tachiyomi.domain.chapter.interactor.GetChaptersByMangaId
 import tachiyomi.domain.chapter.model.Chapter
 import tachiyomi.domain.chapter.model.NoChaptersException
 import tachiyomi.domain.library.model.GroupLibraryMode
@@ -101,9 +99,12 @@ import java.time.Instant
 import java.time.ZonedDateTime
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.TimeUnit
-import java.util.concurrent.atomic.AtomicBoolean
-import java.util.concurrent.atomic.AtomicInteger
+import kotlin.concurrent.atomics.AtomicBoolean
+import kotlin.concurrent.atomics.AtomicInt
+import kotlin.concurrent.atomics.ExperimentalAtomicApi
+import kotlin.concurrent.atomics.incrementAndFetch
 
+@OptIn(ExperimentalAtomicApi::class)
 class LibraryUpdateJob(private val context: Context, workerParams: WorkerParameters) :
     CoroutineWorker(context, workerParams) {
 
@@ -127,8 +128,6 @@ class LibraryUpdateJob(private val context: Context, workerParams: WorkerParamet
     private val insertTrack: InsertTrack = Injekt.get()
     private val trackerManager: TrackerManager = Injekt.get()
     private val mdList = trackerManager.mdList
-    private val getChaptersByMangaId: GetChaptersByMangaId = Injekt.get()
-    private val setReadStatus: SetReadStatus = Injekt.get()
     // SY <--
 
     private val notifier = LibraryUpdateNotifier(context)
@@ -138,8 +137,7 @@ class LibraryUpdateJob(private val context: Context, workerParams: WorkerParamet
     override suspend fun doWork(): Result {
         if (tags.contains(WORK_NAME_AUTO)) {
             if (Build.VERSION.SDK_INT < Build.VERSION_CODES.P) {
-                val preferences = Injekt.get<LibraryPreferences>()
-                val restrictions = preferences.autoUpdateDeviceRestrictions().get()
+                val restrictions = libraryPreferences.autoUpdateDeviceRestrictions().get()
                 if ((DEVICE_ONLY_ON_WIFI in restrictions) && !context.isConnectedToWifi()) {
                     return Result.retry()
                 }
@@ -164,20 +162,14 @@ class LibraryUpdateJob(private val context: Context, workerParams: WorkerParamet
         val groupExtra = inputData.getString(KEY_GROUP_EXTRA)
         // SY <--
 
-        // Shin -->
-        val singleMangaUpdateId = inputData.getLong(KEY_SINGLE_MANGA_UPDATE, -1L)
-        // Shin <--
+        setForegroundSafely()
 
-        if (singleMangaUpdateId == -1L) {
-            setForegroundSafely()
-        }
-
-        addMangaToQueue(categoryId, group, groupExtra, singleMangaUpdateId)
+        addMangaToQueue(categoryId, group, groupExtra)
 
         return withIOContext {
             try {
                 when (target) {
-                    Target.CHAPTERS -> updateChapterList(singleMangaUpdateId != -1L)
+                    Target.CHAPTERS -> updateChapterList()
                     Target.COVERS -> updateCovers()
                     // SY -->
                     Target.SYNC_FOLLOWS -> syncFollows()
@@ -221,16 +213,13 @@ class LibraryUpdateJob(private val context: Context, workerParams: WorkerParamet
         categoryId: Long,
         group: Int,
         groupExtra: String?,
-        singleMangaUpdateId: Long,
     ) {
         val libraryManga = getLibraryManga.await()
         // SY -->
         val groupLibraryUpdateType = libraryPreferences.groupLibraryUpdateType().get()
         // SY <--
 
-        val listToUpdate = /* Shin --> */ if (singleMangaUpdateId != -1L) {
-            libraryManga.filter { it.manga.id == singleMangaUpdateId }
-        } /* Shin <-- */ else if (categoryId != -1L) {
+        val listToUpdate = if (categoryId != -1L) {
             libraryManga.filter { it.category == categoryId }
         } else if (
             group == LibraryGroup.BY_DEFAULT ||
@@ -355,9 +344,9 @@ class LibraryUpdateJob(private val context: Context, workerParams: WorkerParamet
      *
      * @return an observable delivering the progress of each update.
      */
-    private suspend fun updateChapterList(singleMangaUpdate: Boolean = false) {
+    private suspend fun updateChapterList() {
         val semaphore = Semaphore(5)
-        val progressCount = AtomicInteger(0)
+        val progressCount = AtomicInt(0)
         val currentlyUpdatingManga = CopyOnWriteArrayList<Manga>()
         val newUpdates = CopyOnWriteArrayList<Pair<Manga, Array<Chapter>>>()
         val failedUpdates = CopyOnWriteArrayList<Pair<Manga, String?>>()
@@ -412,50 +401,23 @@ class LibraryUpdateJob(private val context: Context, workerParams: WorkerParamet
                                     currentlyUpdatingManga,
                                     progressCount,
                                     manga,
-                                    !singleMangaUpdate,
                                 ) {
                                     try {
                                         val newChapters = updateManga(manga, fetchWindow)
-                                            // SY -->
-                                            .sortedByDescending { it.sourceOrder }.run {
-                                                if (libraryPreferences.libraryReadDuplicateChapters().get()) {
-                                                    val readChapters = getChaptersByMangaId.await(manga.id).filter {
-                                                        it.read
-                                                    }
-                                                    val newReadChapters = this.filter { chapter ->
-                                                        chapter.chapterNumber >= 0 &&
-                                                            readChapters.any {
-                                                                it.chapterNumber == chapter.chapterNumber
-                                                            }
-                                                    }
-
-                                                    if (newReadChapters.isNotEmpty()) {
-                                                        setReadStatus.await(true, *newReadChapters.toTypedArray())
-                                                    }
-
-                                                    this.filterNot { newReadChapters.contains(it) }
-                                                } else {
-                                                    this
-                                                }
-                                            }
-                                        // SY <--
+                                            .sortedByDescending { it.sourceOrder }
 
                                         if (newChapters.isNotEmpty()) {
                                             val chaptersToDownload = filterChaptersForDownload.await(manga, newChapters)
 
                                             if (chaptersToDownload.isNotEmpty()) {
                                                 downloadChapters(manga, chaptersToDownload)
-                                                hasDownloads.set(true)
+                                                hasDownloads.store(true)
                                             }
 
                                             libraryPreferences.newUpdatesCount().getAndSet { it + newChapters.size }
 
                                             // Convert to the manga that contains new chapters
                                             newUpdates.add(manga to newChapters.toTypedArray())
-                                        }
-
-                                        if (newChapters.isEmpty() && singleMangaUpdate) {
-                                            notifier.showNoUpdateNotification(manga)
                                         }
                                     } catch (e: Throwable) {
                                         val errorMessage = when (e) {
@@ -482,7 +444,7 @@ class LibraryUpdateJob(private val context: Context, workerParams: WorkerParamet
 
         if (newUpdates.isNotEmpty()) {
             notifier.showUpdateNotifications(newUpdates)
-            if (hasDownloads.get()) {
+            if (hasDownloads.load()) {
                 downloadManager.startDownloads()
             }
         }
@@ -548,7 +510,7 @@ class LibraryUpdateJob(private val context: Context, workerParams: WorkerParamet
 
     private suspend fun updateCovers() {
         val semaphore = Semaphore(5)
-        val progressCount = AtomicInteger(0)
+        val progressCount = AtomicInt(0)
         val currentlyUpdatingManga = CopyOnWriteArrayList<Manga>()
 
         coroutineScope {
@@ -596,11 +558,12 @@ class LibraryUpdateJob(private val context: Context, workerParams: WorkerParamet
     }
 
     // SY -->
+
     /**
      * filter all follows from Mangadex and only add reading or rereading manga to library
      */
     private suspend fun syncFollows() = coroutineScope {
-        val preferences = Injekt.get<UnsortedPreferences>()
+        val preferences = Injekt.get<SourcePreferences>()
         var count = 0
         val mangaDex = MdUtil.getEnabledMangaDex(preferences, sourceManager = sourceManager)
             ?: return@coroutineScope
@@ -623,7 +586,7 @@ class LibraryUpdateJob(private val context: Context, workerParams: WorkerParamet
                 var dbManga = getManga.await(networkManga.url, mangaDex.id)
 
                 if (dbManga == null) {
-                    dbManga = networkToLocalManga.await(
+                    dbManga = networkToLocalManga(
                         Manga.create().copy(
                             url = networkManga.url,
                             ogTitle = networkManga.title,
@@ -682,35 +645,30 @@ class LibraryUpdateJob(private val context: Context, workerParams: WorkerParamet
 
     private suspend fun withUpdateNotification(
         updatingManga: CopyOnWriteArrayList<Manga>,
-        completed: AtomicInteger,
+        completed: AtomicInt,
         manga: Manga,
-        showProgress: Boolean = true,
         block: suspend () -> Unit,
     ) = coroutineScope {
         ensureActive()
 
-        if (showProgress) {
-            updatingManga.add(manga)
-            notifier.showProgressNotification(
-                updatingManga,
-                completed.get(),
-                mangaToUpdate.size,
-            )
-        }
+        updatingManga.add(manga)
+        notifier.showProgressNotification(
+            updatingManga,
+            completed.load(),
+            mangaToUpdate.size,
+        )
 
         block()
 
         ensureActive()
 
-        if (showProgress) {
-            updatingManga.remove(manga)
-            completed.getAndIncrement()
-            notifier.showProgressNotification(
-                updatingManga,
-                completed.get(),
-                mangaToUpdate.size,
-            )
-        }
+        updatingManga.remove(manga)
+        completed.incrementAndFetch()
+        notifier.showProgressNotification(
+            updatingManga,
+            completed.load(),
+            mangaToUpdate.size,
+        )
     }
 
     /**
@@ -778,16 +736,13 @@ class LibraryUpdateJob(private val context: Context, workerParams: WorkerParamet
         private const val KEY_TARGET = "target"
 
         // SY -->
+
         /**
          * Key for group to update.
          */
         const val KEY_GROUP = "group"
         const val KEY_GROUP_EXTRA = "group_extra"
         // SY <--
-
-        // Shin -->
-        const val KEY_SINGLE_MANGA_UPDATE = "single_manga_update"
-        // Shin <--
 
         fun cancelAllWorks(context: Context) {
             context.workManager.cancelAllWorkByTag(TAG)
@@ -850,10 +805,12 @@ class LibraryUpdateJob(private val context: Context, workerParams: WorkerParamet
             group: Int = LibraryGroup.BY_DEFAULT,
             groupExtra: String? = null,
             // SY <--
-            // Shin -->
-            singleMangaUpdateId: Long? = null,
-            // Shin <--
         ): Boolean {
+            val libraryPreferences = Injekt.get<LibraryPreferences>()
+            if (libraryPreferences.remoteUpdaterUrl().get().isNotEmpty()) {
+                return LibraryUpdateService.start(context, category, group, groupExtra)
+            }
+
             val wm = context.workManager
             // Check if the LibraryUpdateJob is already running
             if (wm.isRunning(TAG)) {
@@ -868,59 +825,53 @@ class LibraryUpdateJob(private val context: Context, workerParams: WorkerParamet
                 KEY_GROUP to group,
                 KEY_GROUP_EXTRA to groupExtra,
                 // SY <--
-                // Shin -->
-                KEY_SINGLE_MANGA_UPDATE to singleMangaUpdateId,
-                // Shin <--
             )
 
-            if (singleMangaUpdateId != null) {
-                val singleMangaUpdateJob = OneTimeWorkRequestBuilder<LibraryUpdateJob>()
-                    .addTag(WORK_NAME_SINGLE_MANGA_UPDATE)
+            val syncPreferences: SyncPreferences = Injekt.get()
+
+            // Always sync the data before library update if syncing is enabled.
+            if (syncPreferences.isSyncEnabled()) {
+                // Check if SyncDataJob is already running
+                if (SyncDataJob.isRunning(context)) {
+                    // SyncDataJob is already running
+                    return false
+                }
+
+                // Define the SyncDataJob
+                val syncDataJob = OneTimeWorkRequestBuilder<SyncDataJob>()
+                    .addTag(SyncDataJob.TAG_MANUAL)
+                    .build()
+
+                // Chain SyncDataJob to run before LibraryUpdateJob
+                val libraryUpdateJob = OneTimeWorkRequestBuilder<LibraryUpdateJob>()
+                    .addTag(TAG)
+                    .addTag(WORK_NAME_MANUAL)
                     .setInputData(inputData)
                     .build()
 
-                wm.enqueue(singleMangaUpdateJob)
+                wm.beginUniqueWork(WORK_NAME_MANUAL, ExistingWorkPolicy.KEEP, syncDataJob)
+                    .then(libraryUpdateJob)
+                    .enqueue()
             } else {
-                val syncPreferences: SyncPreferences = Injekt.get()
+                val request = OneTimeWorkRequestBuilder<LibraryUpdateJob>()
+                    .addTag(TAG)
+                    .addTag(WORK_NAME_MANUAL)
+                    .setInputData(inputData)
+                    .build()
 
-                // Always sync the data before library update if syncing is enabled.
-                if (syncPreferences.isSyncEnabled()) {
-                    // Check if SyncDataJob is already running
-                    if (SyncDataJob.isRunning(context)) {
-                        // SyncDataJob is already running
-                        return false
-                    }
-
-                    // Define the SyncDataJob
-                    val syncDataJob = OneTimeWorkRequestBuilder<SyncDataJob>()
-                        .addTag(SyncDataJob.TAG_MANUAL)
-                        .build()
-
-                    // Chain SyncDataJob to run before LibraryUpdateJob
-                    val libraryUpdateJob = OneTimeWorkRequestBuilder<LibraryUpdateJob>()
-                        .addTag(TAG)
-                        .addTag(WORK_NAME_MANUAL)
-                        .setInputData(inputData)
-                        .build()
-
-                    wm.beginUniqueWork(WORK_NAME_MANUAL, ExistingWorkPolicy.KEEP, syncDataJob)
-                        .then(libraryUpdateJob)
-                        .enqueue()
-                } else {
-                    val request = OneTimeWorkRequestBuilder<LibraryUpdateJob>()
-                        .addTag(TAG)
-                        .addTag(WORK_NAME_MANUAL)
-                        .setInputData(inputData)
-                        .build()
-
-                    wm.enqueueUniqueWork(WORK_NAME_MANUAL, ExistingWorkPolicy.KEEP, request)
-                }
+                wm.enqueueUniqueWork(WORK_NAME_MANUAL, ExistingWorkPolicy.KEEP, request)
             }
 
             return true
         }
 
         fun stop(context: Context) {
+            val libraryPreferences = Injekt.get<LibraryPreferences>()
+            if (libraryPreferences.remoteUpdaterUrl().get().isNotEmpty()) {
+                LibraryUpdateService.stop(context)
+                return
+            }
+
             val wm = context.workManager
             val workQuery = WorkQuery.Builder.fromTags(listOf(TAG))
                 .addStates(listOf(WorkInfo.State.RUNNING))

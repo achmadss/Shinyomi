@@ -663,8 +663,10 @@ class ReaderActivity : BaseActivity() {
             SurfaceColors.SURFACE_2.getColor(this),
             if (isNightMode()) 230 else 242, // 90% dark 95% light
         )
+        @Suppress("DEPRECATION")
         window.statusBarColor = toolbarColor
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
+            @Suppress("DEPRECATION")
             window.navigationBarColor = toolbarColor
         }
 
@@ -715,7 +717,7 @@ class ReaderActivity : BaseActivity() {
             ?.pages
             ?.forEachIndexed { _, page ->
                 var shouldQueuePage = false
-                if (page.status == Page.State.ERROR) {
+                if (page.status is Page.State.Error) {
                     shouldQueuePage = true
                 } /*else if (page.status == Page.LOAD_PAGE ||
                                     page.status == Page.DOWNLOAD_IMAGE) {
@@ -723,7 +725,7 @@ class ReaderActivity : BaseActivity() {
                             }*/
 
                 if (shouldQueuePage) {
-                    page.status = Page.State.QUEUE
+                    page.status = Page.State.Queue
                 } else {
                     return@forEachIndexed
                 }
@@ -756,11 +758,11 @@ class ReaderActivity : BaseActivity() {
             return
         }
 
-        if (curPage.status == Page.State.ERROR) {
+        if (curPage.status is Page.State.Error) {
             toast(SYMR.strings.eh_boost_page_errored)
-        } else if (curPage.status == Page.State.LOAD_PAGE || curPage.status == Page.State.DOWNLOAD_IMAGE) {
+        } else if (curPage.status == Page.State.LoadPage || curPage.status == Page.State.DownloadImage) {
             toast(SYMR.strings.eh_boost_page_downloading)
-        } else if (curPage.status == Page.State.READY) {
+        } else if (curPage.status == Page.State.Ready) {
             toast(SYMR.strings.eh_boost_page_downloaded)
         } else {
             val loader = (viewModel.state.value.viewerChapters?.currChapter?.pageLoader as? HttpPageLoader)

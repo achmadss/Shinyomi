@@ -33,6 +33,7 @@ import com.davemorrissey.labs.subscaleview.SubsamplingScaleImageView.EASE_IN_OUT
 import com.davemorrissey.labs.subscaleview.SubsamplingScaleImageView.EASE_OUT_QUAD
 import com.davemorrissey.labs.subscaleview.SubsamplingScaleImageView.SCALE_TYPE_CENTER_INSIDE
 import com.github.chrisbanes.photoview.PhotoView
+import eu.kanade.domain.base.BasePreferences
 import eu.kanade.tachiyomi.data.coil.cropBorders
 import eu.kanade.tachiyomi.data.coil.customDecoder
 import eu.kanade.tachiyomi.ui.reader.viewer.webtoon.WebtoonSubsamplingImageView
@@ -40,6 +41,8 @@ import eu.kanade.tachiyomi.util.system.animatorDurationScale
 import eu.kanade.tachiyomi.util.view.isVisibleOnScreen
 import okio.BufferedSource
 import tachiyomi.core.common.util.system.ImageUtil
+import uy.kohesive.injekt.Injekt
+import uy.kohesive.injekt.api.get
 
 /**
  * A wrapper view for showing page image.
@@ -57,12 +60,16 @@ open class ReaderPageImageView @JvmOverloads constructor(
     private val isWebtoon: Boolean = false,
 ) : FrameLayout(context, attrs, defStyleAttrs, defStyleRes) {
 
+    private val alwaysDecodeLongStripWithSSIV by lazy {
+        Injekt.get<BasePreferences>().alwaysDecodeLongStripWithSSIV().get()
+    }
+
     private var pageView: View? = null
 
     private var config: Config? = null
 
     var onImageLoaded: (() -> Unit)? = null
-    var onImageLoadError: (() -> Unit)? = null
+    var onImageLoadError: ((Throwable?) -> Unit)? = null
     var onScaleChanged: ((newScale: Float) -> Unit)? = null
     var onViewClicked: (() -> Unit)? = null
 
@@ -78,8 +85,8 @@ open class ReaderPageImageView @JvmOverloads constructor(
     }
 
     @CallSuper
-    open fun onImageLoadError() {
-        onImageLoadError?.invoke()
+    open fun onImageLoadError(error: Throwable?) {
+        onImageLoadError?.invoke(error)
     }
 
     @CallSuper
@@ -107,7 +114,7 @@ open class ReaderPageImageView @JvmOverloads constructor(
                         }
 
                         override fun onImageLoadError(e: Exception) {
-                            onImageLoadError()
+                            onImageLoadError(e)
                         }
                     },
                 )
@@ -283,7 +290,7 @@ open class ReaderPageImageView @JvmOverloads constructor(
                 }
 
                 override fun onImageLoadError(e: Exception) {
-                    this@ReaderPageImageView.onImageLoadError()
+                    this@ReaderPageImageView.onImageLoadError(e)
                 }
             },
         )
@@ -294,7 +301,7 @@ open class ReaderPageImageView @JvmOverloads constructor(
                 isVisible = true
             }
             is BufferedSource -> {
-                if (!isWebtoon) {
+                if (!isWebtoon || alwaysDecodeLongStripWithSSIV) {
                     setHardwareConfig(ImageUtil.canUseHardwareBitmap(data))
                     setImage(ImageSource.inputStream(data.inputStream()))
                     isVisible = true
@@ -311,8 +318,10 @@ open class ReaderPageImageView @JvmOverloads constructor(
                             setImage(ImageSource.bitmap(image.bitmap))
                             isVisible = true
                         },
-                        onError = {
-                            onImageLoadError()
+                    )
+                    .listener(
+                        onError = { _, result ->
+                            onImageLoadError(result.throwable)
                         },
                     )
                     .size(ViewSizeResolver(this@ReaderPageImageView))
@@ -388,8 +397,10 @@ open class ReaderPageImageView @JvmOverloads constructor(
                     isVisible = true
                     this@ReaderPageImageView.onImageLoaded()
                 },
-                onError = {
-                    this@ReaderPageImageView.onImageLoadError()
+            )
+            .listener(
+                onError = { _, result ->
+                    onImageLoadError(result.throwable)
                 },
             )
             .crossfade(false)
