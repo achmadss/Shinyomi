@@ -12,7 +12,6 @@ plugins {
     // id("com.github.zellius.shortcut-helper")
     alias(libs.plugins.aboutLibraries)
     id("com.github.ben-manes.versions")
-    id("com.google.firebase.crashlytics")
 }
 
 if (gradle.startParameter.taskRequests.toString().contains("Standard")) {
@@ -32,7 +31,7 @@ android {
     defaultConfig {
         applicationId = "dev.achmad.shinyomi"
 
-        versionCode = 74
+        versionCode = 75
         versionName = "1.0.2"
 
         buildConfigField("String", "COMMIT_COUNT", "\"${getCommitCount()}\"")
