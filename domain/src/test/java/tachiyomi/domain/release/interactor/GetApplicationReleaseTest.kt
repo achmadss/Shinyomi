@@ -46,11 +46,9 @@ class GetApplicationReleaseTest {
 
         val result = getApplicationRelease.await(
             GetApplicationRelease.Arguments(
-                isPreview = true,
                 commitCount = 1000,
                 versionName = "",
                 repository = "test",
-                syDebugVersion = "100",
             ),
         )
 
@@ -75,10 +73,8 @@ class GetApplicationReleaseTest {
 
         val result = getApplicationRelease.await(
             GetApplicationRelease.Arguments(
-                isPreview = false,
                 commitCount = 0,
                 versionName = "v1.0.0",
-                syDebugVersion = "0",
                 repository = "test",
             ),
         )
@@ -104,10 +100,8 @@ class GetApplicationReleaseTest {
 
         val result = getApplicationRelease.await(
             GetApplicationRelease.Arguments(
-                isPreview = false,
                 commitCount = 0,
                 versionName = "v2.0.0",
-                syDebugVersion = "0",
                 repository = "test",
             ),
         )
@@ -131,10 +125,8 @@ class GetApplicationReleaseTest {
 
         val result = getApplicationRelease.await(
             GetApplicationRelease.Arguments(
-                isPreview = false,
                 commitCount = 0,
                 versionName = "v2.0.0",
-                syDebugVersion = "0",
                 repository = "test",
             ),
         )
