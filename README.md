@@ -52,7 +52,7 @@ Features of TachiyomiSY include:
 * Enhanced usability for internal and delegated sources
 
 Features of Shinyomi include:
-* External Watcher Service (Experimental)
+* Remote Updater
 
 Custom sources:
 * E-Hentai/ExHentai
